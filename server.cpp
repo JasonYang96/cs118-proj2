@@ -8,6 +8,8 @@
 
 using namespace std;
 
+const size_t MSS = 1024;
+
 void process_error(int status, const string &function);
 int set_up_socket(char* argv[]);
 

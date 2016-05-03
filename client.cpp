@@ -1,3 +1,4 @@
+#include "packet.h"
 #include <cstring> // for memset
 #include <iostream> // for cout
 #include <stdio.h> // for perror
@@ -25,7 +26,8 @@ int main(int argc, char* argv[])
     int status;
     while (1)
     {
-        string test = "hello";
+        Packet p = Packet('0', '0', '1', "test", "test2", "512", "test4");
+        string test = p.encode();
         status = send(sockfd, test.c_str(), test.size(), 0);
         process_error(status, "send");
     }
