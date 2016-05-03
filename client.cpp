@@ -9,6 +9,7 @@
 using namespace std;
 
 void process_error(int status, const string &function);
+int set_up_socket(char* argv[]);
 
 int main(int argc, char* argv[])
 {
@@ -18,6 +19,20 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    int sockfd = set_up_socket(argv);
+
+    // recv data from server
+    int status;
+    while (1)
+    {
+        string test = "hello";
+        status = send(sockfd, test.c_str(), test.size(), 0);
+        process_error(status, "send");
+    }
+}
+
+int set_up_socket(char* argv[])
+{
     struct addrinfo hints;
     struct addrinfo *res;
     int status;
@@ -29,15 +44,15 @@ int main(int argc, char* argv[])
     hints.ai_flags = AI_PASSIVE;
 
     //set up socket calls
-    int sockfd;
     status = getaddrinfo(argv[1], argv[2], &hints, &res);
     if (status != 0)
     {
         cerr << "getaddrinfo error: " << gai_strerror(status) << endl;
-        return 1;
+        exit(1);
     }
 
     // find socket to connect to
+    int sockfd;
     int yes = 1;
     auto i = res;
     for (; i != NULL; i = i ->ai_next)
@@ -69,16 +84,10 @@ int main(int argc, char* argv[])
     if (i == NULL)
     {
         perror("bind to a socket");
-        return 1;
+        exit(1);
     }
 
-    // recv data from server
-    while (1)
-    {
-        string test = "hello";
-        status = send(sockfd, test.c_str(), test.size(), 0);
-        process_error(status, "send");
-    }
+    return sockfd;
 }
 
 void process_error(int status, const string &function)
@@ -86,6 +95,6 @@ void process_error(int status, const string &function)
     if (status == -1)
     {
         perror(&function[0]);
-        return 1;
+        exit(1);
     }
 }

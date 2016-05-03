@@ -9,6 +9,7 @@
 using namespace std;
 
 void process_error(int status, const string &function);
+int set_up_socket(char* argv[]);
 
 int main(int argc, char* argv[])
 {
@@ -20,6 +21,24 @@ int main(int argc, char* argv[])
 
     // TODO: TRY TO OPEN FILE TO SERVE IT
 
+    int sockfd = set_up_socket(argv);
+
+    // accept packets
+    while (1)
+    {
+        size_t buf_pos = 0;
+        string data;
+        data.resize(512);
+        int n_bytes = recv(sockfd, &data[buf_pos], data.size() - buf_pos, 0);
+        process_error(n_bytes, "recv");
+        cout << data << endl;
+        data.clear();
+        data.resize(512);
+    }
+}
+
+int set_up_socket(char* argv[])
+{
     struct addrinfo hints;
     struct addrinfo *res;
     int status;
@@ -31,15 +50,15 @@ int main(int argc, char* argv[])
     hints.ai_flags = AI_PASSIVE;
 
     //set up socket calls
-    int sockfd;
     status = getaddrinfo(NULL, argv[1], &hints, &res);
     if (status != 0)
     {
         cerr << "getaddrinfo error: " << gai_strerror(status) << endl;
-        return 1;
+        exit(1);
     }
 
     // find socket to bind to
+    int sockfd;
     int yes = 1;
     auto i = res;
     for (; i != NULL; i = i ->ai_next)
@@ -71,21 +90,10 @@ int main(int argc, char* argv[])
     if (i == NULL)
     {
         perror("bind to a socket");
-        return 1;
+        exit(1);
     }
 
-    // accept packets
-    while (1)
-    {
-        size_t buf_pos = 0;
-        string data;
-        data.resize(512);
-        int n_bytes = recv(sockfd, &data[buf_pos], data.size() - buf_pos, 0);
-        process_error(n_bytes, "recv");
-        cout << data << endl;
-        data.clear();
-        data.resize(512);
-    }
+    return sockfd;
 }
 
 void process_error(int status, const string &function)
@@ -93,6 +101,6 @@ void process_error(int status, const string &function)
     if (status == -1)
     {
         perror(&function[0]);
-        return 1;
+        exit(1);
     }
 }
