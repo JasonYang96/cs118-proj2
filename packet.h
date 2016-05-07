@@ -17,11 +17,6 @@ public:
         m_cont_len = cont_len;
     }
 
-    void encode(std::stringstream &ss)
-    {
-        ss << m_syn << m_ack << m_fin << m_seq_num << m_ack_num << m_cont_len;
-    }
-
 private:
     char        m_syn;
     char        m_ack;
@@ -39,14 +34,6 @@ public:
         size_t len = size_t(stoll(cont_len));
         m_data.resize(len);
         m_data = std::string(data, 0, len);
-    }
-
-    std::string encode()
-    {
-        std::stringstream ss;
-        m_header.encode(ss);
-        ss << m_data;
-        return ss.str();
     }
 
 private:
