@@ -1,3 +1,4 @@
+#include "packet.h"
 #include <cstring> // for memset
 #include <iostream> // for cout
 #include <stdio.h> // for perror

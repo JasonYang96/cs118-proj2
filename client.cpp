@@ -28,7 +28,6 @@ int main(int argc, char* argv[])
     {
         // send packet to server
         Packet p = Packet('0', '0', '1', "test", "test2", "512", "test4");
-        string test = p.encode();
         status = send(sockfd, test.c_str(), test.size(), 0);
         process_error(status, "send");
 
