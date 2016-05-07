@@ -5,25 +5,28 @@
 #include <sys/socket.h> // for socket
 #include <sys/types.h> // for types
 #include <netdb.h> // for getaddrinfo
+#include <sys/stat.h> // for open
+#include <fcntl.h> // for open
+#include <unistd.h> // for close
 
 using namespace std;
 
 const size_t MSS = 1024;
 
 void process_error(int status, const string &function);
-int set_up_socket(char* argv[]);
+int open_file(char* file);
+int set_up_socket(char* port);
 
 int main(int argc, char* argv[])
 {
     if (argc != 3)
     {
         cout << "Usage: " << argv[0] << " PORT-NUMBER FILE-NAME" << endl;
-        return 1;
+        exit(1);
     }
 
-    // TODO: TRY TO OPEN FILE TO SERVE IT
-
-    int sockfd = set_up_socket(argv);
+    int file_fd = open_file(argv[2]);
+    int sockfd = set_up_socket(argv[1]);
 
     // accept packets
     while (1)
@@ -31,15 +34,54 @@ int main(int argc, char* argv[])
         size_t buf_pos = 0;
         string data;
         data.resize(512);
-        int n_bytes = recv(sockfd, &data[buf_pos], data.size() - buf_pos, 0);
+        struct sockaddr_storage recv_addr;
+        socklen_t addr_len = sizeof(recv_addr);
+
+        // recv packet from client
+        int n_bytes = recvfrom(sockfd, &data[buf_pos], data.size() - buf_pos, 0, (struct sockaddr *) &recv_addr, &addr_len);
         process_error(n_bytes, "recv");
+        buf_pos += n_bytes;
         cout << data << endl;
+
+        // send packet to client
+        string test = "recv data! sending data back!";
+        int status = sendto(sockfd, test.c_str(), test.size(), 0, (struct sockaddr *) &recv_addr, addr_len);
+        process_error(status, "send");
         data.clear();
         data.resize(512);
     }
 }
 
-int set_up_socket(char* argv[])
+int open_file(char* file)
+{
+    // tries to open file served
+    int file_fd = open(file, O_RDONLY);
+    if (file_fd < 0)
+    {
+        cerr << "Could not open " << file << endl;
+        exit(1);
+    }
+
+    // makes sure it's a regular file
+    struct stat buf;
+    int status = fstat(file_fd, &buf);
+    if (status == -1)
+    {
+        perror("fstat");
+        close(file_fd);
+        exit(1);
+    }
+
+    if (!S_ISREG(buf.st_mode))
+    {
+        cerr << file << " is not a regular file" << endl;
+        exit(1);
+    }
+
+    return file_fd;
+}
+
+int set_up_socket(char* port)
 {
     struct addrinfo hints;
     struct addrinfo *res;
@@ -52,7 +94,7 @@ int set_up_socket(char* argv[])
     hints.ai_flags = AI_PASSIVE;
 
     //set up socket calls
-    status = getaddrinfo(NULL, argv[1], &hints, &res);
+    status = getaddrinfo(NULL, port, &hints, &res);
     if (status != 0)
     {
         cerr << "getaddrinfo error: " << gai_strerror(status) << endl;

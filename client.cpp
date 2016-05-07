@@ -26,10 +26,20 @@ int main(int argc, char* argv[])
     int status;
     while (1)
     {
+        // send packet to server
         Packet p = Packet('0', '0', '1', "test", "test2", "512", "test4");
         string test = p.encode();
         status = send(sockfd, test.c_str(), test.size(), 0);
         process_error(status, "send");
+
+        // recv packet from server
+        size_t buf_pos = 0;
+        string data;
+        data.resize(512);
+        int n_bytes = recv(sockfd, &data[buf_pos], data.size() - buf_pos, 0);
+        process_error(n_bytes, "recv");
+        buf_post += n_bytes;
+        cout << data << endl;
     }
 }
 
