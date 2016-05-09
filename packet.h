@@ -3,42 +3,107 @@
 
 #include <string>
 #include <sstream>
+#include <bitset>
+#include <cstring>
 
 class Header {
 public:
-    Header() {};
-    Header(char seq, char ack, char fin, const std::string &seq_num, const std::string &ack_num, const std::string &cont_len)
+    Header() = default;
+    Header(bool syn, bool ack, bool fin, uint16_t seq_num, uint16_t ack_num, uint16_t cont_len)
     {
-        seq = m_syn;
-        ack = m_ack;
-        fin = m_fin;
+        m_flags[3] = 0;
+        m_flags[2] = syn;
+        m_flags[1] = ack;
+        m_flags[0] = fin;
         m_seq_num = seq_num;
         m_ack_num = ack_num;
         m_cont_len = cont_len;
     }
 
+    bool syn_set()
+    {
+        return m_flags[2];
+    }
+
+    bool ack_set()
+    {
+        return m_flags[1];
+    }
+
+    bool fin_set()
+    {
+        return m_flags[0];
+    }
+
+    uint16_t seq_num()
+    {
+        return m_seq_num;
+    }
+
+    uint16_t ack_num()
+    {
+        return m_ack_num;
+    }
+
+    uint16_t cont_len()
+    {
+        return m_cont_len;
+    }
+
 private:
-    char        m_syn;
-    char        m_ack;
-    char        m_fin;
-    std::string m_seq_num;
-    std::string m_ack_num;
-    std::string m_cont_len;
+    std::bitset<4>   m_flags;
+    uint16_t         m_seq_num;
+    uint16_t         m_ack_num;
+    uint16_t         m_cont_len;
 };
 
 class Packet {
 public:
-    Packet(char seq, char ack, char fin, const std::string &seq_num, const std::string &ack_num, const std::string &cont_len, const std::string &data)
+    Packet() = default;
+    Packet(bool seq, bool ack, bool fin, uint16_t seq_num, uint16_t ack_num, uint16_t cont_len, char *data)
     {
         m_header = Header(seq, ack, fin, seq_num, ack_num, cont_len);
-        size_t len = size_t(stoll(cont_len));
-        m_data.resize(len);
-        m_data = std::string(data, 0, len);
+        strcpy(m_data, data);
+    }
+
+    bool syn_set()
+    {
+        return m_header.syn_set();
+    }
+
+    bool ack_set()
+    {
+        return m_header.ack_set();
+    }
+
+    bool fin_set()
+    {
+        return m_header.fin_set();
+    }
+
+    uint16_t seq_num()
+    {
+        return m_header.seq_num();
+    }
+
+    uint16_t ack_num()
+    {
+        return m_header.ack_num();
+    }
+
+    uint16_t cont_len()
+    {
+        return m_header.cont_len();
+    }
+
+    std::string data()
+    {
+        return m_data;
     }
 
 private:
-    Header      m_header;
-    std::string m_data;
+    Header m_header;
+    char   m_data[512];
 };
 
 #endif
