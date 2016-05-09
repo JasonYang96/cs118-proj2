@@ -39,10 +39,19 @@ int main(int argc, char* argv[])
         socklen_t addr_len = sizeof(recv_addr);
 
         // recv packet from client
-        int n_bytes = recvfrom(sockfd, &data[buf_pos], data.size() - buf_pos, 0, (struct sockaddr *) &recv_addr, &addr_len);
+        Packet p;
+        int n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
         process_error(n_bytes, "recv");
         buf_pos += n_bytes;
-        cout << data << endl;
+
+        // debugging couts, remove when complete
+        // cout << "data is " << p.data() << endl;
+        // cout << (p.syn_set() ? "syn set" : "syn not set") << endl;
+        // cout << (p.ack_set() ? "ack set" : "ack not set") << endl;
+        // cout << (p.fin_set() ? "fin set" : "fin not set") << endl;
+        // cout << "seq num is " << p.seq_num() << endl;
+        // cout << "ack num is " << p.ack_num() << endl;
+        // cout << "cont len is " << p.cont_len() << endl;
 
         // send packet to client
         string test = "recv data! sending data back!";

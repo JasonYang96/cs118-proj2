@@ -27,8 +27,8 @@ int main(int argc, char* argv[])
     while (1)
     {
         // send packet to server
-        Packet p = Packet('0', '0', '1', "test", "test2", "512", "test4");
-        status = send(sockfd, test.c_str(), test.size(), 0);
+        Packet p = Packet(0, 0, 1, 12, 123, 1234, "test4");
+        status = send(sockfd, (void *) &p, sizeof(p), 0);
         process_error(status, "send");
 
         // recv packet from server
@@ -37,7 +37,7 @@ int main(int argc, char* argv[])
         data.resize(512);
         int n_bytes = recv(sockfd, &data[buf_pos], data.size() - buf_pos, 0);
         process_error(n_bytes, "recv");
-        buf_post += n_bytes;
+        buf_pos += n_bytes;
         cout << data << endl;
     }
 }
