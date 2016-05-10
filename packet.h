@@ -8,7 +8,7 @@
 class Packet {
 public:
     Packet() = default;
-    Packet(bool seq, bool ack, bool fin, uint16_t seq_num, uint16_t ack_num, uint16_t cont_len, char *data)
+    Packet(bool syn, bool ack, bool fin, uint16_t seq_num, uint16_t ack_num, uint16_t cont_len, char *data)
     {
         m_flags[3] = 0;
         m_flags[2] = syn;
