@@ -21,25 +21,30 @@ int main(int argc, char* argv[])
     }
 
     int sockfd = set_up_socket(argv);
+    Packet p;
 
-    // recv data from server
+    // send SYN segment
     int status;
-    while (1)
-    {
-        // send packet to server
-        Packet p = Packet(0, 0, 1, 12, 123, 1234, "test4");
-        status = send(sockfd, (void *) &p, sizeof(p), 0);
-        process_error(status, "send");
+    p = Packet(1, 0, 0, 12, 0, 0, "test5");
+    status = send(sockfd, (void *) &p, sizeof(p), 0);
+    process_error(status, "sending SYN");
+    cout << "sending SYN" << endl;
 
-        // recv packet from server
-        size_t buf_pos = 0;
-        string data;
-        data.resize(512);
-        int n_bytes = recv(sockfd, &data[buf_pos], data.size() - buf_pos, 0);
-        process_error(n_bytes, "recv");
-        buf_pos += n_bytes;
-        cout << data << endl;
+    // recv packet
+    int n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
+    process_error(n_bytes, "recv SYN ACK");
+    cout << "receiving SYN ACK" << endl;
+    
+    // ACK if SYN ACK segment
+    if (p.syn_set() && p.ack_set())
+    {
+        p = Packet(0, 1, 0, 13, 0, 0, "dr");
+        status = send(sockfd, (void *) &p, sizeof(p), 0);
+        process_error(status, "sending ACK after SYN ACK");
+        cout << "sending ACK" << endl;
     }
+
+    while(1) {}
 }
 
 int set_up_socket(char* argv[])
