@@ -29,24 +29,15 @@ int main(int argc, char* argv[])
     int file_fd = open_file(argv[2]);
     int sockfd = set_up_socket(argv[1]);
     int status;
+    Packet p;
 
     // recv SYN from client
-    Packet p;
     struct sockaddr_storage recv_addr;
     socklen_t addr_len = sizeof(recv_addr);
     int n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
     process_error(n_bytes, "recv SYN");
     cout << "recv SYN" << endl;
     cout << p.data() << endl;
-
-    // debugging couts, remove when complete
-    // cout << "data is " << p.data() << endl;
-    // cout << (p.syn_set() ? "syn set" : "syn not set") << endl;
-    // cout << (p.ack_set() ? "ack set" : "ack not set") << endl;
-    // cout << (p.fin_set() ? "fin set" : "fin not set") << endl;
-    // cout << "seq num is " << p.seq_num() << endl;
-    // cout << "ack num is " << p.ack_num() << endl;
-    // cout << "cont len is " << p.cont_len() << endl;
 
     // send SYN ACK if SYN segment
     if (p.syn_set())
@@ -65,6 +56,15 @@ int main(int argc, char* argv[])
 
     while (1) {}
 }
+
+// debugging couts, remove when complete
+// cout << "data is " << p.data() << endl;
+// cout << (p.syn_set() ? "syn set" : "syn not set") << endl;
+// cout << (p.ack_set() ? "ack set" : "ack not set") << endl;
+// cout << (p.fin_set() ? "fin set" : "fin not set") << endl;
+// cout << "seq num is " << p.seq_num() << endl;
+// cout << "ack num is " << p.ack_num() << endl;
+// cout << "cont len is " << p.cont_len() << endl;
 
 int open_file(char* file)
 {

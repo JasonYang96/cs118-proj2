@@ -21,20 +21,20 @@ int main(int argc, char* argv[])
     }
 
     int sockfd = set_up_socket(argv);
+    int status;
     Packet p;
 
     // send SYN segment
-    int status;
     p = Packet(1, 0, 0, 12, 0, 0, "test5");
     status = send(sockfd, (void *) &p, sizeof(p), 0);
     process_error(status, "sending SYN");
     cout << "sending SYN" << endl;
 
-    // recv packet
+    // recv SYN ACK
     int n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
     process_error(n_bytes, "recv SYN ACK");
     cout << "receiving SYN ACK" << endl;
-    
+
     // ACK if SYN ACK segment
     if (p.syn_set() && p.ack_set())
     {
