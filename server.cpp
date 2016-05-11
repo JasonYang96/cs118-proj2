@@ -55,12 +55,13 @@ int main(int argc, char* argv[])
     do
     {
         string data;
-        size_t buf_pos;
+        size_t buf_pos = 0;
         data.resize(DATA_LENGTH - 1);
         do
         {
             n_bytes = read(file_fd, &data[buf_pos], DATA_LENGTH - 1);
-        } while (n_bytes != 0 && n_bytes != DATA_LENGTH - 1);
+            buf_pos += n_bytes;
+        } while (n_bytes != 0 && buf_pos != DATA_LENGTH - 1);
         p = Packet(0,0,0, 100, 101, 0, data.c_str());
         status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
         process_error(status, "sending FIN");

@@ -20,7 +20,6 @@ public:
         m_ack_num = ack_num;
         m_cont_len = cont_len;
         strcpy(m_data, data);
-        m_data[DATA_LENGTH-1] = '\0';
     }
 
     bool syn_set()
