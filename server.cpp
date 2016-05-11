@@ -33,18 +33,18 @@ int main(int argc, char* argv[])
     Packet p;
 
     // recv SYN from client
-    n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
-    process_error(n_bytes, "recv SYN");
-    cout << "recv SYN" << endl;
-
-    // send SYN ACK if SYN segment
-    if (p.syn_set())
+    do
     {
-        p = Packet(1, 1, 0, 96, 12, 0, "");
-        status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
-        process_error(status, "sending SYN ACK");
-        cout << "sending SYN ACK" << endl;
-    }
+        n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
+        process_error(n_bytes, "recv SYN");
+        cout << "recv SYN" << endl;
+    } while (!p.syn_set());
+
+    // sending SYN ACK
+    p = Packet(1, 1, 0, 96, 12, 0, "");
+    status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
+    process_error(status, "sending SYN ACK");
+    cout << "sending SYN ACK" << endl;
 
     // recv ACK
     n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
@@ -75,17 +75,18 @@ int main(int argc, char* argv[])
     cout << "sending FIN" << endl;
 
     // recv FIN ACK
-    n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
-    process_error(n_bytes, "recv FIN ACK");
-    cout << "recv FIN ACK" << endl;
+    do
+    {
+        n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
+        process_error(n_bytes, "recv FIN ACK");
+        cout << "recv FIN ACK" << endl;
+    } while (!p.fin_set() || !p.ack_set());
 
     // send ACK after FIN ACK
     p = Packet(0,1,0, 97, 13, 0, "");
     status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
     process_error(status, "sending ACK after FIN ACK");
     cout << "sending ACK after FIN ACK" << endl;
-
-    while (1) {}
 }
 
 int open_file(char* file)
@@ -113,6 +114,9 @@ int open_file(char* file)
         cerr << file << " is not a regular file" << endl;
         exit(1);
     }
+
+    // TODO: FOR DEBUGGING PURPOSES ONLY, GET RID WHEN DONE
+    cout << "file is " << buf.st_size << " bytes" << endl;
 
     return file_fd;
 }

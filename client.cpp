@@ -32,18 +32,18 @@ int main(int argc, char* argv[])
     cout << "sending SYN" << endl;
 
     // recv SYN ACK
-    n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
-    process_error(n_bytes, "recv SYN ACK");
-    cout << "receiving SYN ACK" << endl;
-
-    // ACK if SYN ACK segment
-    if (p.syn_set() && p.ack_set())
+    do
     {
-        p = Packet(0, 1, 0, 13, 0, 0, "dr");
-        status = send(sockfd, (void *) &p, sizeof(p), 0);
-        process_error(status, "sending ACK after SYN ACK");
-        cout << "sending ACK" << endl;
-    }
+        n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
+        process_error(n_bytes, "recv SYN ACK");
+        cout << "receiving SYN ACK" << endl;
+    } while (!p.syn_set() || !p.ack_set());
+
+    // send ACK after SYN ACK
+    p = Packet(0, 1, 0, 13, 0, 0, "dr");
+    status = send(sockfd, (void *) &p, sizeof(p), 0);
+    process_error(status, "sending ACK after SYN ACK");
+    cout << "sending ACK" << endl;
 
     // recv file from server
     stringstream ss;
@@ -67,8 +67,6 @@ int main(int argc, char* argv[])
     n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
     process_error(n_bytes, "recv ACK after FIN ACK");
     cout << "recv ACK after FIN ACK" << endl;
-
-    while(1) {}
 }
 
 int set_up_socket(char* argv[])
