@@ -22,7 +22,7 @@ int main(int argc, char* argv[])
     }
 
     int sockfd = set_up_socket(argv);
-    int status;
+    int status, n_bytes;
     Packet p;
 
     // send SYN segment
@@ -32,7 +32,7 @@ int main(int argc, char* argv[])
     cout << "sending SYN" << endl;
 
     // recv SYN ACK
-    int n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
+    n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
     process_error(n_bytes, "recv SYN ACK");
     cout << "receiving SYN ACK" << endl;
 
@@ -53,7 +53,7 @@ int main(int argc, char* argv[])
         process_error(n_bytes, "recv file");
         cout << "recv file with size " << p.data().size() << endl;
         ss << p.data();
-    } while (!p.fin_set());
+    } while (!p.fin_set()); // receive until a FIN segment is recv'd
     cout << ss.str() << endl;
     cout << "recv'd FIN" << endl;
 
