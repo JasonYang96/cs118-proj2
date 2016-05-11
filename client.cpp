@@ -6,6 +6,7 @@
 #include <sys/socket.h> // for socket
 #include <sys/types.h> // for types
 #include <netdb.h> // for getaddrinfo
+#include <sstream> // for string streams
 
 using namespace std;
 
@@ -43,6 +44,29 @@ int main(int argc, char* argv[])
         process_error(status, "sending ACK after SYN ACK");
         cout << "sending ACK" << endl;
     }
+
+    // recv file from server
+    stringstream ss;
+    do
+    {
+        n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
+        process_error(n_bytes, "recv file");
+        cout << "recv file with size " << p.data().size() << endl;
+        ss << p.data();
+    } while (!p.fin_set());
+    cout << ss.str() << endl;
+    cout << "recv'd FIN" << endl;
+
+    // send FIN ACK if FIN segment
+    p = Packet(0, 1, 1, 96, 12, 0, "");
+    status = send(sockfd, (void *) &p, sizeof(p), 0);
+    process_error(status, "sending FIN ACK");
+    cout << "sending FIN ACK" << endl;
+
+    // recv ACK
+    n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
+    process_error(n_bytes, "recv ACK after FIN ACK");
+    cout << "recv ACK after FIN ACK" << endl;
 
     while(1) {}
 }

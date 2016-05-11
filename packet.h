@@ -5,10 +5,12 @@
 #include <bitset>
 #include <cstring>
 
+const size_t DATA_LENGTH = 512;
+
 class Packet {
 public:
     Packet() = default;
-    Packet(bool syn, bool ack, bool fin, uint16_t seq_num, uint16_t ack_num, uint16_t cont_len, char *data)
+    Packet(bool syn, bool ack, bool fin, uint16_t seq_num, uint16_t ack_num, uint16_t cont_len, const char *data)
     {
         m_flags[3] = 0;
         m_flags[2] = syn;
@@ -18,6 +20,7 @@ public:
         m_ack_num = ack_num;
         m_cont_len = cont_len;
         strcpy(m_data, data);
+        m_data[DATA_LENGTH-1] = '\0';
     }
 
     bool syn_set()
@@ -60,7 +63,7 @@ private:
     uint16_t         m_seq_num; // 4 bytes
     uint16_t         m_ack_num; // 4 bytes
     uint16_t         m_cont_len; // 4 bytes
-    char   m_data[512];
+    char             m_data[DATA_LENGTH];
 };
 
 #endif

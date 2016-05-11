@@ -8,11 +8,9 @@
 #include <netdb.h> // for getaddrinfo
 #include <sys/stat.h> // for open
 #include <fcntl.h> // for open
-#include <unistd.h> // for close
+#include <unistd.h> // for close, read
 
 using namespace std;
-
-const size_t MSS = 1024;
 
 void process_error(int status, const string &function);
 int open_file(char* file);
@@ -28,16 +26,16 @@ int main(int argc, char* argv[])
 
     int file_fd = open_file(argv[2]);
     int sockfd = set_up_socket(argv[1]);
-    int status;
+
+    struct sockaddr_storage recv_addr;
+    socklen_t addr_len = sizeof(recv_addr);
+    int status, n_bytes;
     Packet p;
 
     // recv SYN from client
-    struct sockaddr_storage recv_addr;
-    socklen_t addr_len = sizeof(recv_addr);
-    int n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
+    n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
     process_error(n_bytes, "recv SYN");
     cout << "recv SYN" << endl;
-    cout << p.data() << endl;
 
     // send SYN ACK if SYN segment
     if (p.syn_set())
@@ -52,19 +50,42 @@ int main(int argc, char* argv[])
     n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
     process_error(n_bytes, "recv ACK after SYN ACK");
     cout << "recv ACK after SYN ACK" << endl;
-    cout << p.data() << endl;
+
+    // send file
+    do
+    {
+        string data;
+        size_t buf_pos;
+        data.resize(DATA_LENGTH - 1);
+        do
+        {
+            n_bytes = read(file_fd, &data[buf_pos], DATA_LENGTH - 1);
+        } while (n_bytes != 0 && n_bytes != DATA_LENGTH - 1);
+        p = Packet(0,0,0, 100, 101, 0, data.c_str());
+        status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
+        process_error(status, "sending FIN");
+        cout << "sending packet with size " << p.data().size() << endl;
+    } while (n_bytes != 0);
+
+    // send FIN
+    p = Packet(0,0,1, 97, 13, 0, "");
+    status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
+    process_error(status, "sending FIN");
+    cout << "sending FIN" << endl;
+
+    // recv FIN ACK
+    n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
+    process_error(n_bytes, "recv FIN ACK");
+    cout << "recv FIN ACK" << endl;
+
+    // send ACK after FIN ACK
+    p = Packet(0,1,0, 97, 13, 0, "");
+    status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
+    process_error(status, "sending ACK after FIN ACK");
+    cout << "sending ACK after FIN ACK" << endl;
 
     while (1) {}
 }
-
-// debugging couts, remove when complete
-// cout << "data is " << p.data() << endl;
-// cout << (p.syn_set() ? "syn set" : "syn not set") << endl;
-// cout << (p.ack_set() ? "ack set" : "ack not set") << endl;
-// cout << (p.fin_set() ? "fin set" : "fin not set") << endl;
-// cout << "seq num is " << p.seq_num() << endl;
-// cout << "ack num is " << p.ack_num() << endl;
-// cout << "cont len is " << p.cont_len() << endl;
 
 int open_file(char* file)
 {
