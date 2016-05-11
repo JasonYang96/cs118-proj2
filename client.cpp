@@ -29,21 +29,18 @@ int main(int argc, char* argv[])
     p = Packet(1, 0, 0, 12, 0, 0, "test5");
     status = send(sockfd, (void *) &p, sizeof(p), 0);
     process_error(status, "sending SYN");
-    cout << "sending SYN" << endl;
 
     // recv SYN ACK
     do
     {
         n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
         process_error(n_bytes, "recv SYN ACK");
-        cout << "receiving SYN ACK" << endl;
     } while (!p.syn_set() || !p.ack_set());
 
     // send ACK after SYN ACK
     p = Packet(0, 1, 0, 13, 0, 0, "dr");
     status = send(sockfd, (void *) &p, sizeof(p), 0);
     process_error(status, "sending ACK after SYN ACK");
-    cout << "sending ACK" << endl;
 
     // recv file from server
     stringstream ss;
@@ -51,22 +48,20 @@ int main(int argc, char* argv[])
     {
         n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
         process_error(n_bytes, "recv file");
-        cout << "recv file with size " << p.data().size() << endl;
+        cout << "recv file with size " << p.data_len() << " and " << p.data().size() << endl;
         ss << p.data();
     } while (!p.fin_set()); // receive until a FIN segment is recv'd
+    // TODO: FOR DEBUGGING PURPOSES ONLY, REMOVE WHEN DONE
     cout << ss.str() << endl;
-    cout << "recv'd FIN" << endl;
 
     // send FIN ACK if FIN segment
     p = Packet(0, 1, 1, 96, 12, 0, "");
     status = send(sockfd, (void *) &p, sizeof(p), 0);
     process_error(status, "sending FIN ACK");
-    cout << "sending FIN ACK" << endl;
 
     // recv ACK
     n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
     process_error(n_bytes, "recv ACK after FIN ACK");
-    cout << "recv ACK after FIN ACK" << endl;
 }
 
 int set_up_socket(char* argv[])

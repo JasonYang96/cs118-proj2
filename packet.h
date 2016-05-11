@@ -10,7 +10,7 @@ const size_t DATA_LENGTH = 512;
 class Packet {
 public:
     Packet() = default;
-    Packet(bool syn, bool ack, bool fin, uint16_t seq_num, uint16_t ack_num, uint16_t cont_len, const char *data)
+    Packet(bool syn, bool ack, bool fin, uint16_t seq_num, uint16_t ack_num, uint16_t data_len, const char *data)
     {
         m_flags[3] = 0;
         m_flags[2] = syn;
@@ -18,7 +18,7 @@ public:
         m_flags[0] = fin;
         m_seq_num = seq_num;
         m_ack_num = ack_num;
-        m_cont_len = cont_len;
+        m_data_len = data_len;
         strcpy(m_data, data);
     }
 
@@ -47,9 +47,9 @@ public:
         return m_ack_num;
     }
 
-    uint16_t cont_len()
+    uint16_t data_len()
     {
-        return m_cont_len;
+        return m_data_len;
     }
 
     std::string data()
@@ -58,10 +58,10 @@ public:
     }
 
 private:
-    std::bitset<4>   m_flags; // one byte
-    uint16_t         m_seq_num; // 4 bytes
-    uint16_t         m_ack_num; // 4 bytes
-    uint16_t         m_cont_len; // 4 bytes
+    std::bitset<4>   m_flags;    // one byte
+    uint16_t         m_seq_num;  // 4 bytes
+    uint16_t         m_ack_num;  // 4 bytes
+    uint16_t         m_data_len; // 4 bytes
     char             m_data[DATA_LENGTH];
 };
 
