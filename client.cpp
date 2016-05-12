@@ -37,7 +37,7 @@ int main(int argc, char* argv[])
     status = send(sockfd, (void *) &p, sizeof(p), 0);
     process_error(status, "sending SYN");
     seq_num = (seq_num + 1); // SYN packet takes up 1 sequence
-    cout << "Sending syn packet with seq " << p.seq_num() << endl;
+    cout << "Debug: Sending syn packet with seq " << p.seq_num() << endl;
 
     // recv SYN ACK
     do
@@ -45,14 +45,14 @@ int main(int argc, char* argv[])
         n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
         process_error(n_bytes, "recv SYN ACK");
     } while (!p.syn_set() || !p.ack_set());
-    cout << "Receiving syn ack packet with seq " << p.seq_num() << endl;
+    cout << "Debug: Receiving syn ack packet with seq " << p.seq_num() << endl;
     ack_num = p.seq_num() + 1;
 
     // send ACK after SYN ACK
     p = Packet(0, 1, 0, seq_num, ack_num, 0, "");
     status = send(sockfd, (void *) &p, sizeof(p), 0);
     process_error(status, "sending ACK after SYN ACK");
-    cout << "Sending ack packet with ack " << p.ack_num() << endl;
+    cout << "Sending ACK packet " << p.ack_num() << endl;
     seq_num += 1;
 
     // receive until a FIN segment is recv'd
@@ -61,8 +61,8 @@ int main(int argc, char* argv[])
     {
         n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
         process_error(n_bytes, "recv file");
-        cout << "recv file with size " << p.data_len() << " and " << p.data().size() << endl;
-        cout << "Receiving data packet with seq " << p.seq_num() << endl;
+        cout << "Debug: recv file with size " << p.data_len() << " and " << p.data().size() << endl;
+        cout << "Receiving data packet " << p.seq_num() << endl;
         ack_num = p.seq_num() + p.data_len();
         ss << p.data();
 
@@ -73,7 +73,7 @@ int main(int argc, char* argv[])
             p = Packet(0, 1, 1, seq_num, ack_num, 0, "");
             status = send(sockfd, (void *) &p, sizeof(p), 0);
             process_error(status, "sending FIN ACK");
-            cout << "Sending fin ack packet with ack " << p.ack_num() << endl;
+            cout << "Sending ACK packet " << p.ack_num() << endl;
             seq_num+= 1;
             break;
         }
@@ -82,17 +82,18 @@ int main(int argc, char* argv[])
             p = Packet(0, 1, 0, seq_num, ack_num, 0, "");
             status = send(sockfd, (void *) &p, sizeof(p), 0);
             process_error(status, "sending ACK for data packet");
-            cout << "Sending ack packet with ack " << p.ack_num() << endl;
+            cout << "Sending ACK packet " << p.ack_num() << endl;
             seq_num += 1;
         }
     }
     // TODO: FOR DEBUGGING PURPOSES ONLY, REMOVE WHEN DONE
     //cout << ss.str() << endl;
+    // TODO: open a file and write to it
 
     // recv ACK
     n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
     process_error(n_bytes, "recv ACK after FIN ACK");
-    cout << "Receiving ack packet after FIN ACK with seq " << p.seq_num();
+    cout << "Debug: Receiving ack packet after FIN ACK " << p.seq_num();
 }
 
 int set_up_socket(char* argv[])
