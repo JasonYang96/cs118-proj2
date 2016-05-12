@@ -25,12 +25,12 @@ int main(int argc, char* argv[])
 
     int sockfd = set_up_socket(argv);
     int status, n_bytes;
-    uint16_t ack_num;
     Packet p;
 
     // select random seq_num
     srand(time(NULL));
     uint16_t seq_num = rand() % MSN;
+    uint16_t ack_num;
 
     // send SYN segment
     p = Packet(1, 0, 0, seq_num, 0, 0, "");
