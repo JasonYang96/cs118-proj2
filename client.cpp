@@ -7,6 +7,8 @@
 #include <sys/types.h> // for types
 #include <netdb.h> // for getaddrinfo
 #include <sstream> // for string streams
+#include <ctime> // for time
+#include <cstdlib> // for srand, rand
 
 using namespace std;
 
@@ -23,12 +25,19 @@ int main(int argc, char* argv[])
 
     int sockfd = set_up_socket(argv);
     int status, n_bytes;
+    uint16_t ack_num;
     Packet p;
 
+    // select random seq_num
+    srand(time(NULL));
+    uint16_t seq_num = rand() % MSN;
+
     // send SYN segment
-    p = Packet(1, 0, 0, 12, 0, 0, "test5");
+    p = Packet(1, 0, 0, seq_num, 0, 0, "");
     status = send(sockfd, (void *) &p, sizeof(p), 0);
     process_error(status, "sending SYN");
+    seq_num = (seq_num + 1); // SYN packet takes up 1 sequence
+    cout << "Sending syn packet with seq " << p.seq_num() << endl;
 
     // recv SYN ACK
     do
@@ -36,32 +45,54 @@ int main(int argc, char* argv[])
         n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
         process_error(n_bytes, "recv SYN ACK");
     } while (!p.syn_set() || !p.ack_set());
+    cout << "Receiving syn ack packet with seq " << p.seq_num() << endl;
+    ack_num = p.seq_num() + 1;
 
     // send ACK after SYN ACK
-    p = Packet(0, 1, 0, 13, 0, 0, "dr");
+    p = Packet(0, 1, 0, seq_num, ack_num, 0, "");
     status = send(sockfd, (void *) &p, sizeof(p), 0);
     process_error(status, "sending ACK after SYN ACK");
+    cout << "Sending ack packet with ack " << p.ack_num() << endl;
+    seq_num += 1;
 
-    // recv file from server
+    // receive until a FIN segment is recv'd
     stringstream ss;
-    do
+    while (1)
     {
         n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
         process_error(n_bytes, "recv file");
         cout << "recv file with size " << p.data_len() << " and " << p.data().size() << endl;
+        cout << "Receiving data packet with seq " << p.seq_num() << endl;
+        ack_num = p.seq_num() + p.data_len();
         ss << p.data();
-    } while (!p.fin_set()); // receive until a FIN segment is recv'd
-    // TODO: FOR DEBUGGING PURPOSES ONLY, REMOVE WHEN DONE
-    cout << ss.str() << endl;
 
-    // send FIN ACK if FIN segment
-    p = Packet(0, 1, 1, 96, 12, 0, "");
-    status = send(sockfd, (void *) &p, sizeof(p), 0);
-    process_error(status, "sending FIN ACK");
+        if (p.fin_set()) // fin segment
+        {
+            // send FIN ACK if FIN segment
+            ack_num += 1; //consumed fin segment
+            p = Packet(0, 1, 1, seq_num, ack_num, 0, "");
+            status = send(sockfd, (void *) &p, sizeof(p), 0);
+            process_error(status, "sending FIN ACK");
+            cout << "Sending fin ack packet with ack " << p.ack_num() << endl;
+            seq_num+= 1;
+            break;
+        }
+        else // data segment so send ACK
+        {
+            p = Packet(0, 1, 0, seq_num, ack_num, 0, "");
+            status = send(sockfd, (void *) &p, sizeof(p), 0);
+            process_error(status, "sending ACK for data packet");
+            cout << "Sending ack packet with ack " << p.ack_num() << endl;
+            seq_num += 1;
+        }
+    }
+    // TODO: FOR DEBUGGING PURPOSES ONLY, REMOVE WHEN DONE
+    //cout << ss.str() << endl;
 
     // recv ACK
     n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
     process_error(n_bytes, "recv ACK after FIN ACK");
+    cout << "Receiving ack packet after FIN ACK with seq " << p.seq_num();
 }
 
 int set_up_socket(char* argv[])

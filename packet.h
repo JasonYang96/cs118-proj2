@@ -6,6 +6,7 @@
 #include <cstring>
 
 const size_t DATA_LENGTH = 512;
+const int MSN = 30720;
 
 class Packet {
 public:
