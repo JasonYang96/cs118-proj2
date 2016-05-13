@@ -4,8 +4,9 @@
 #include <string>
 #include <bitset>
 #include <cstring>
+#include <sys/time.h>
 
-const size_t DATA_LENGTH = 512;
+const size_t DATA_LENGTH = 20;
 const int MSN = 30720;
 
 class Packet {
@@ -66,4 +67,23 @@ private:
     char             m_data[DATA_LENGTH];
 };
 
+
+class Packet_info
+{
+public:
+    Packet_info(Packet p)
+    {
+        m_p = p;
+        gettimeofday(&m_time_sent, NULL);
+    }
+
+    Packet pkt()
+    {
+        return m_p;
+    }
+private:
+    Packet m_p;
+    timeval m_time_sent;
+
+};
 #endif

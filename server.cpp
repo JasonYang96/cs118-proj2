@@ -9,12 +9,15 @@
 #include <sys/stat.h> // for open
 #include <fcntl.h> // for open
 #include <unistd.h> // for close, read
+#include <list> // for list
+#include <sys/time.h> // for timeval
 
 using namespace std;
 
 void process_error(int status, const string &function);
 int open_file(char* file);
 int set_up_socket(char* port);
+size_t update_window(Packet p, list<Packet_info>& lst);
 
 int main(int argc, char* argv[])
 {
@@ -60,32 +63,44 @@ int main(int argc, char* argv[])
     ack_num = p.seq_num() + 1;
 
 
+    list<Packet_info> window;
+    size_t window_space = 100;
     // send file
     do
     {
         // split file into sections
-        string data;
-        size_t buf_pos = 0;
-        data.resize(DATA_LENGTH - 1);
         do
         {
-            n_bytes = read(file_fd, &data[buf_pos], DATA_LENGTH - 1);
-            buf_pos += n_bytes;
-        } while (n_bytes != 0 && buf_pos != DATA_LENGTH - 1);
+            string data;
+            size_t buf_pos = 0;
+            data.resize(DATA_LENGTH - 1);
 
-        // send data packet
-        p = Packet(0,0,0, seq_num, ack_num, buf_pos, data.c_str());
-        status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
-        process_error(status, "sending packet");
-        cout << "Sending data packet " << seq_num << endl;
-        seq_num += p.data_len();
-        cout << "Debug: sending packet of size " << sizeof(p) << " with size " << p.data_len() << " and " << p.data().size() << endl;
+            // make sure recv all that we can
+            do
+            {
+                size_t n_to_send = min(window_space, DATA_LENGTH - 1);
+                n_bytes = read(file_fd, &data[buf_pos], n_to_send);
+                buf_pos += n_bytes;
+                window_space -= n_bytes;
+            } while (window_space > 0 && n_bytes != 0 && buf_pos != DATA_LENGTH - 1);
+
+            // send packet
+            p = Packet(0,0,0, seq_num, ack_num, buf_pos, data.c_str());
+            Packet_info pkt_info = Packet_info(p);
+            status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
+            process_error(status, "sending packet");
+            window.push_back(pkt_info);
+            cout << "Sending data packet " << seq_num << endl;
+            seq_num += p.data_len();
+            cout << "Debug: sending packet of size " << sizeof(p) << " with size " << p.data_len() << " and " << p.data().size() << endl;
+        } while (window_space > 0 && n_bytes != 0);
 
         // recv ACK
         int ack_n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
         process_error(ack_n_bytes, "recv ACK after SYN ACK");
-        cout << "Receiving ACK packet " << p.ack_num() << endl;
+        window_space += update_window(p, window);
         ack_num = p.seq_num() + 1;
+        cout << "Receiving ACK packet " << p.ack_num() << endl;
     } while (n_bytes != 0);
 
     // send FIN
@@ -110,6 +125,24 @@ int main(int argc, char* argv[])
     process_error(status, "sending ACK after FIN ACK");
     cout << "Sending data packet " << seq_num << endl;
     seq_num += 1;
+}
+
+size_t update_window(Packet p, list<Packet_info>& lst)
+{
+    size_t n_removed = 0;
+
+    if (lst.empty())
+        return 0;
+
+    auto it = lst.begin();
+    while (it->pkt().seq_num() < p.ack_num())
+    {
+        n_removed += it->pkt().data_len();
+        lst.pop_front();
+        it = lst.begin();
+    }
+
+    return n_removed;
 }
 
 int open_file(char* file)
