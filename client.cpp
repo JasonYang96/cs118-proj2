@@ -6,14 +6,17 @@
 #include <sys/socket.h> // for socket
 #include <sys/types.h> // for types
 #include <netdb.h> // for getaddrinfo
-#include <sstream> // for string streams
 #include <ctime> // for time
 #include <cstdlib> // for srand, rand
+#include <list>
+#include <fstream>
 
 using namespace std;
 
 void process_error(int status, const string &function);
 int set_up_socket(char* argv[]);
+void add_to_window(Packet_info p, list<Packet_info>& window);
+void add_consecutive_data(list<Packet_info>& window, ofstream& output, uint16_t& base_num);
 
 int main(int argc, char* argv[])
 {
@@ -30,7 +33,7 @@ int main(int argc, char* argv[])
     // select random seq_num
     srand(time(NULL));
     uint16_t seq_num = rand() % MSN;
-    uint16_t ack_num;
+    uint16_t ack_num, base_num;
 
     // send SYN segment
     p = Packet(1, 0, 0, seq_num, 0, 0, "");
@@ -54,17 +57,22 @@ int main(int argc, char* argv[])
     process_error(status, "sending ACK after SYN ACK");
     cout << "Sending ACK packet " << p.ack_num() << endl;
     seq_num += 1;
+    base_num = ack_num;
 
     // receive until a FIN segment is recv'd
-    stringstream ss;
+    list<Packet_info> window;
+    ofstream output("file");
     while (1)
     {
         n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
         process_error(n_bytes, "recv file");
+        add_to_window(Packet_info(p), window);
+
         cout << "Debug: recv file with size " << p.data_len() << " and " << p.data().size() << endl;
         cout << "Receiving data packet " << p.seq_num() << endl;
         ack_num = p.seq_num() + p.data_len();
-        ss << p.data();
+
+        add_consecutive_data(window, output, base_num);
 
         if (p.fin_set()) // fin segment
         {
@@ -86,14 +94,50 @@ int main(int argc, char* argv[])
             seq_num += 1;
         }
     }
-    // TODO: FOR DEBUGGING PURPOSES ONLY, REMOVE WHEN DONE
-    //cout << ss.str() << endl;
-    // TODO: open a file and write to it
+    output.close();
 
     // recv ACK
     n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
     process_error(n_bytes, "recv ACK after FIN ACK");
     cout << "Debug: Receiving ack packet after FIN ACK " << p.seq_num();
+}
+
+void add_consecutive_data(list<Packet_info>& window, ofstream& output, uint16_t& base_num)
+{
+    for (auto it = window.begin(); it != window.end(); it = window.begin())
+    {
+        if (base_num == it->pkt().seq_num())
+        {
+            // Found consecutive data
+            output << it->pkt().data();
+            base_num += it->pkt().data_len();
+            window.pop_front();
+        }
+        else
+            break;
+    }
+}
+
+void add_to_window(Packet_info p, list<Packet_info>& window)
+{
+    if (window.empty())
+    {
+        window.push_back(p);
+        return;
+    }
+
+    for (auto it = window.begin(); it != window.end(); it++)
+    {
+        if (p.pkt().seq_num() > it->pkt().seq_num())
+        {
+            // Found where it should go
+            window.insert(it, p);
+            return;
+        }
+    }
+
+    // If we get here, then we already accounted for this packet anyway
+
 }
 
 int set_up_socket(char* argv[])
