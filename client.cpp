@@ -39,7 +39,7 @@ int main(int argc, char* argv[])
     p = Packet(1, 0, 0, seq_num, 0, 0, "");
     status = send(sockfd, (void *) &p, sizeof(p), 0);
     process_error(status, "sending SYN");
-    seq_num = (seq_num + 1); // SYN packet takes up 1 sequence
+    seq_num = (seq_num + 1) % MSN; // SYN packet takes up 1 sequence
     cout << "Debug: Sending syn packet with seq " << p.seq_num() << endl;
 
     // recv SYN ACK
@@ -49,14 +49,14 @@ int main(int argc, char* argv[])
         process_error(n_bytes, "recv SYN ACK");
     } while (!p.syn_set() || !p.ack_set());
     cout << "Debug: Receiving syn ack packet with seq " << p.seq_num() << endl;
-    ack_num = p.seq_num() + 1;
+    ack_num = (p.seq_num() + 1) % MSN;
 
     // send ACK after SYN ACK
     p = Packet(0, 1, 0, seq_num, ack_num, 0, "");
     status = send(sockfd, (void *) &p, sizeof(p), 0);
     process_error(status, "sending ACK after SYN ACK");
     cout << "Sending ACK packet " << p.ack_num() << endl;
-    seq_num += 1;
+    seq_num = (seq_num + 1) % MSN;
     base_num = ack_num;
 
     // receive until a FIN segment is recv'd
@@ -70,19 +70,19 @@ int main(int argc, char* argv[])
 
         cout << "Debug: recv file with size " << p.data_len() << " and " << p.data().size() << endl;
         cout << "Receiving data packet " << p.seq_num() << endl;
-        ack_num = p.seq_num() + p.data_len();
+        ack_num = (p.seq_num() + p.data_len()) % MSN;
 
         add_consecutive_data(window, output, base_num);
 
         if (p.fin_set()) // fin segment
         {
             // send FIN ACK if FIN segment
-            ack_num += 1; //consumed fin segment
+            ack_num = (ack_num + 1) % MSN; //consumed fin segment
             p = Packet(0, 1, 1, seq_num, ack_num, 0, "");
             status = send(sockfd, (void *) &p, sizeof(p), 0);
             process_error(status, "sending FIN ACK");
             cout << "Sending ACK packet " << p.ack_num() << endl;
-            seq_num+= 1;
+            seq_num = (seq_num + 1) % MSN;
             break;
         }
         else // data segment so send ACK
@@ -91,7 +91,7 @@ int main(int argc, char* argv[])
             status = send(sockfd, (void *) &p, sizeof(p), 0);
             process_error(status, "sending ACK for data packet");
             cout << "Sending ACK packet " << p.ack_num() << endl;
-            seq_num += 1;
+            seq_num = (seq_num + 1) % MSN;
         }
     }
     output.close();
@@ -104,17 +104,21 @@ int main(int argc, char* argv[])
 
 void add_consecutive_data(list<Packet_info>& window, ofstream& output, uint16_t& base_num)
 {
-    for (auto it = window.begin(); it != window.end(); it = window.begin())
+    //find packet to start at
+    auto it = window.begin();
+    for (; it != window.end(); it++)
     {
-        if (base_num == it->pkt().seq_num())
-        {
-            // Found consecutive data
-            output << it->pkt().data();
-            base_num += it->pkt().data_len();
-            window.pop_front();
-        }
-        else
+        if (it->pkt().seq_num() == base_num)
             break;
+    }
+
+    while (it != window.end() && it->pkt().seq_num() == base_num)
+    {
+        output << it->pkt().data();
+        base_num = (base_num + it->pkt().data_len()) % MSN;
+        auto temp = next(it);
+        window.erase(it);
+        it = temp;
     }
 }
 
