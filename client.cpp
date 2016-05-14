@@ -99,7 +99,7 @@ int main(int argc, char* argv[])
     // recv ACK
     n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
     process_error(n_bytes, "recv ACK after FIN ACK");
-    cout << "Debug: Receiving ack packet after FIN ACK " << p.seq_num();
+    cout << "Debug: Receiving ack packet after FIN ACK " << p.seq_num() << endl;
 }
 
 void add_consecutive_data(list<Packet_info>& window, ofstream& output, uint16_t& base_num)
