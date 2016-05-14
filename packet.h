@@ -7,7 +7,7 @@
 #include <sys/time.h>
 
 const size_t DATA_LENGTH = 20;
-const int MSN = 30720;
+const uint16_t MSN = 30720;
 
 class Packet {
 public:
