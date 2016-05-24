@@ -10,14 +10,16 @@
 #include <fcntl.h> // for open
 #include <unistd.h> // for close, read
 #include <list> // for list
-#include <sys/time.h> // for timeval
+#include <sys/time.h> // for socket timeout
+#include <errno.h>
 
 using namespace std;
 
 void process_error(int status, const string &function);
 int open_file(char* file);
 int set_up_socket(char* port);
-size_t update_window(Packet p, list<Packet_info>& window, uint16_t &base_num);
+size_t update_window(Packet p, list<Packet_info> &window, uint16_t &base_num);
+Packet_info get_first_pkt_info(list<Packet_info> &window, uint16_t &base_num);
 
 int main(int argc, char* argv[])
 {
@@ -63,9 +65,10 @@ int main(int argc, char* argv[])
     cout << "Receiving ACK packet " << p.ack_num() << endl;
     ack_num = (p.seq_num() + 1) % MSN;
 
-
     list<Packet_info> window;
-    size_t window_space = 100;
+    size_t cwnd = MSS;
+    size_t ssthresh = INITIAL_SSTHRESH;
+    bool slow_start = true;
     // send file
     do
     {
@@ -74,38 +77,106 @@ int main(int argc, char* argv[])
         {
             string data;
             size_t buf_pos = 0;
-            data.resize(DATA_LENGTH - 1);
+            data.resize(MSS - 1);
 
             // make sure recv all that we can
             do
             {
-                size_t n_to_send = min(window_space, DATA_LENGTH - 1);
+                size_t n_to_send = min(cwnd, MSS - 1);
                 n_bytes = read(file_fd, &data[buf_pos], n_to_send);
                 buf_pos += n_bytes;
-                window_space -= n_bytes;
-            } while (window_space > 0 && n_bytes != 0 && buf_pos != DATA_LENGTH - 1);
+                cwnd -= n_bytes;
+            } while (cwnd > 0 && n_bytes != 0 && buf_pos != MSS - 1);
 
             // send packet
-            p = Packet(0,0,0, seq_num, ack_num, buf_pos, data.c_str());
+            p = Packet(0, 0, 0, seq_num, ack_num, buf_pos, data.c_str());
             Packet_info pkt_info = Packet_info(p);
             status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
             process_error(status, "sending packet");
             window.push_back(pkt_info);
             cout << "Sending data packet " << seq_num << endl;
             seq_num = (seq_num + p.data_len()) % MSN;
-            cout << "Debug: sending packet of size " << sizeof(p) << " with size " << p.data_len() << " and " << p.data().size() << endl;
-        } while (window_space > 0 && n_bytes != 0);
+            cout << "Debug: sending packet of size " << sizeof(p) + 1 << " with size " << p.data_len() << " and " << p.data().size() << endl;
+        } while (cwnd > 0 && n_bytes != 0);
+
+        // set up timevals
+        Packet_info first_pkt = get_first_pkt_info(window, base_num);
+        struct timeval base_time = first_pkt.get_time_sent();
+        
+        // create 500 ms timeval
+        struct timeval timeout;
+        timeout.tv_usec = INITIAL_TIMEOUT * 1000; // microseconds
+
+        // find max_time for first packet
+        struct timeval max_time;
+        timeradd(&base_time, &timeout, &max_time);
 
         // recv ACK
-        int ack_n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
-        process_error(ack_n_bytes, "recv ACK after SYN ACK");
-        window_space += update_window(p, window, base_num);
-        ack_num = (p.seq_num() + 1) % MSN;
-        cout << "Receiving ACK packet " << p.ack_num() << endl;
+        do
+        {
+            struct timeval curr_time;
+            gettimeofday(&curr_time, NULL);
+
+            struct timeval time_left;
+            timersub(&max_time, &curr_time, &time_left);
+
+            status = setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&time_left, sizeof(time_left));
+            process_error(status, "setsockopt");
+
+            int ack_n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
+            if (ack_n_bytes == -1) //error
+            {
+                // check if timed out
+                if (errno == EAGAIN || EWOULDBLOCK || EINPROGRESS)
+                {
+                    // adjust cwnd and ssthresh
+                    // TODO: MAKE SURE THIS IS RIGHT
+                    if (slow_start)
+                    {
+                        ssthresh = cwnd / 2;
+                        cwnd = MSS;
+                    }
+                    else
+                    {
+                        ssthresh = cwnd / 2;
+                        cwnd = MSS;
+                        slow_start = true;
+                    }
+
+                    //JACOB: send first packet then continue this do loop
+                    cout << "timed_out" << endl;
+                }
+                else // else another error and process it
+                {
+                    process_error(ack_n_bytes, "recv ACK after sending data");
+                }
+            }
+            else
+            {
+                cwnd += update_window(p, window, base_num);
+                ack_num = (p.seq_num() + 1) % MSN;
+                cout << "Receiving ACK packet " << p.ack_num() << endl;
+            }
+        } while (p.ack_num() < seq_num);
+
+        if (slow_start)
+        {
+            cwnd *= 2;
+        }
+        else
+        {
+            cwnd += MSS;
+        }
+
+        if (cwnd >= ssthresh)
+        {
+            slow_start = false;
+        }
+
     } while (n_bytes != 0);
 
     // send FIN
-    p = Packet(0,0,1, seq_num, ack_num, 0, "");
+    p = Packet(0, 0, 1, seq_num, ack_num, 0, "");
     status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
     process_error(status, "sending FIN");
     cout << "Sending data packet " << seq_num << endl;
@@ -121,13 +192,14 @@ int main(int argc, char* argv[])
     } while (!p.fin_set() || !p.ack_set());
 
     // send ACK after FIN ACK
-    p = Packet(0,1,0, seq_num, ack_num, 0, "");
+    p = Packet(0, 1, 0, seq_num, ack_num, 0, "");
     status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
     process_error(status, "sending ACK after FIN ACK");
     cout << "Sending data packet " << seq_num << endl;
     seq_num = (seq_num + 1) % MSN;
 }
 
+// TODO: UPDATE FIRST PKT
 size_t update_window(Packet p, list<Packet_info>& window, uint16_t &base_num)
 {
     size_t n_removed = 0;
@@ -139,7 +211,6 @@ size_t update_window(Packet p, list<Packet_info>& window, uint16_t &base_num)
             break;
     }
 
-
     while ((it != window.end()) && ((it->pkt().seq_num() + it->pkt().data_len() > MSN) || (it->pkt().seq_num() < p.ack_num())))
     {
         n_removed += it->pkt().data_len();
@@ -150,6 +221,24 @@ size_t update_window(Packet p, list<Packet_info>& window, uint16_t &base_num)
     }
 
     return n_removed;
+}
+
+Packet_info get_first_pkt_info(list<Packet_info> &window, uint16_t &base_num)
+{
+    auto it = window.begin();
+    for (; it != window.end(); it++)
+    {
+        if (it->pkt().seq_num() == base_num)
+            break;
+    }
+
+    if (it == window.end())
+    {
+        cerr << "Passed in bad base_num to get_first_pkt_info" << endl;
+        exit(1);
+    }
+
+    return *it;
 }
 
 int open_file(char* file)
