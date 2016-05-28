@@ -66,6 +66,7 @@ int main(int argc, char* argv[])
 
     unordered_map<uint16_t, Packet_info> window;
     size_t cwnd = MSS - 1;
+    size_t cwnd_used = 0;
     size_t ssthresh = INITIAL_SSTHRESH;
     size_t cwd_pkts = 0;
     size_t pkts_sent = 0;
@@ -84,7 +85,7 @@ int main(int argc, char* argv[])
         }
         else // transmit new segment(s), as allowed
         {
-            while (cwnd > 0 && n_bytes != 0)
+            while (cwnd_used < cwnd && n_bytes != 0)
             {
                 string data;
                 size_t buf_pos = 0;
@@ -97,8 +98,8 @@ int main(int argc, char* argv[])
                     size_t n_to_send = min(cwnd, MSS - 1);
                     n_bytes = read(file_fd, &data[buf_pos], n_to_send);
                     buf_pos += n_bytes;
-                    cwnd -= n_bytes;
-                } while (cwnd > 0 && n_bytes != 0 && buf_pos != MSS - 1);
+                    cwnd_used += n_bytes;
+                } while (cwnd_used < cwnd && n_bytes != 0 && buf_pos != MSS - 1);
 
                 // send packet
                 p = Packet(0, 0, 0, seq_num, ack_num, buf_pos, data.c_str());
@@ -218,7 +219,7 @@ int main(int argc, char* argv[])
 
             prev_ack = p.ack_num();
 
-            cwnd += update_window(p, window, base_num, first_pkt);
+            cwnd_used -= update_window(p, window, base_num, first_pkt);
             ack_num = (p.seq_num() + 1) % MSN;
             cout << "Receiving ACK packet " << p.ack_num() << endl;
         }
