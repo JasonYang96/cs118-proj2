@@ -66,9 +66,6 @@ int main(int argc, char* argv[])
         n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
         process_error(n_bytes, "recv file");
         window.emplace(p.seq_num(), Packet_info(p));
-
-        cout << "Debug: recv file with size " << p.data_len() << " and " << p.data().size() << endl;
-        cout << "Receiving data packet " << p.seq_num() << endl;
         ack_num = (p.seq_num() + p.data_len()) % MSN;
 
         for (auto it = window.find(base_num); it != window.end(); it = window.find(base_num))
@@ -78,9 +75,10 @@ int main(int argc, char* argv[])
             window.erase(it);
         }
 
-        if (p.fin_set()) // fin segment
+        if (p.fin_set())
         {
             // send FIN ACK if FIN segment
+            cout << "Debug: recv FIN packet with seq " << p.seq_num() << endl;
             ack_num = (ack_num + 1) % MSN; //consumed fin segment
             p = Packet(0, 1, 1, seq_num, ack_num, 0, "");
             status = send(sockfd, (void *) &p, sizeof(p), 0);
@@ -91,6 +89,8 @@ int main(int argc, char* argv[])
         }
         else // data segment so send ACK
         {
+            cout << "Debug: recv file with size " << p.data_len() << " and " << p.data().size() << endl;
+            cout << "Receiving data packet " << p.seq_num() << endl;
             p = Packet(0, 1, 0, seq_num, ack_num, 0, "");
             status = send(sockfd, (void *) &p, sizeof(p), 0);
             process_error(status, "sending ACK for data packet");
