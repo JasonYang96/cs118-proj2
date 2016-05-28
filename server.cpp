@@ -54,7 +54,7 @@ int main(int argc, char* argv[])
     p = Packet(1, 1, 0, seq_num, ack_num, 0, "");
     status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
     process_error(status, "sending SYN ACK");
-    cout << "Sending data packet " << seq_num << endl;
+    cout << "Debug: Sending SYN ACK with seq " << seq_num << endl;
     seq_num = (seq_num + 1) % MSN;
     base_num = seq_num;
 
@@ -69,36 +69,47 @@ int main(int argc, char* argv[])
     size_t ssthresh = INITIAL_SSTHRESH;
     size_t cwd_pkts = 0;
     size_t pkts_sent = 0;
+    int dup_ack = 0;
+    uint16_t prev_ack = seq_num;
     bool slow_start = true;
+    bool congestion_avoidance = false;
+    bool fast_recovery = false;
+    bool retransmission = false;
     // send file
     do
     {
-        // split file into sections
-        do
+        if (retransmission) // retransmit missing segment
         {
-            string data;
-            size_t buf_pos = 0;
-            data.resize(MSS - 1);
-
-            // make sure recv all that we can
-            do
+            // Jacob: take care of retransmission
+        }
+        else // transmit new segment(s), as allowed
+        {
+            while (cwnd > 0 && n_bytes != 0)
             {
-                size_t n_to_send = min(cwnd, MSS - 1);
-                n_bytes = read(file_fd, &data[buf_pos], n_to_send);
-                buf_pos += n_bytes;
-                cwnd -= n_bytes;
-            } while (cwnd > 0 && n_bytes != 0 && buf_pos != MSS - 1);
+                string data;
+                size_t buf_pos = 0;
+                data.resize(MSS - 1);
 
-            // send packet
-            p = Packet(0, 0, 0, seq_num, ack_num, buf_pos, data.c_str());
-            Packet_info pkt_info = Packet_info(p);
-            status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
-            process_error(status, "sending packet");
-            window.emplace(seq_num, pkt_info);
-            cout << "Sending data packet " << seq_num << endl;
-            seq_num = (seq_num + p.data_len()) % MSN;
-            cout << "Debug: sending packet of size " << sizeof(p) + 1 << " with size " << p.data_len() << " and " << p.data().size() << endl;
-        } while (cwnd > 0 && n_bytes != 0);
+                cout << "Sending data packet " << seq_num << " " << cwnd << " " << ssthresh << endl;
+                // make sure recv all that we can
+                do
+                {
+                    size_t n_to_send = min(cwnd, MSS - 1);
+                    n_bytes = read(file_fd, &data[buf_pos], n_to_send);
+                    buf_pos += n_bytes;
+                    cwnd -= n_bytes;
+                } while (cwnd > 0 && n_bytes != 0 && buf_pos != MSS - 1);
+
+                // send packet
+                p = Packet(0, 0, 0, seq_num, ack_num, buf_pos, data.c_str());
+                Packet_info pkt_info = Packet_info(p);
+                status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
+                process_error(status, "sending packet");
+                window.emplace(seq_num, pkt_info);
+                seq_num = (seq_num + p.data_len()) % MSN;
+                cout << "Debug: sending packet of size " << sizeof(p) + 1 << " with size " << p.data_len() << " and " << p.data().size() << endl;
+            }
+        }
 
         // set up timevals
         unordered_map<uint16_t, Packet_info>::const_iterator first_pkt = window.find(base_num);
@@ -134,57 +145,83 @@ int main(int argc, char* argv[])
             if (errno == EAGAIN || EWOULDBLOCK || EINPROGRESS)
             {
                 // adjust cwnd and ssthresh
-                // TODO: IMPLEMENT TCP RENO
-                if (slow_start)
-                {
-                    ssthresh = cwnd / 2;
-                    cwnd = MSS;
-                }
-                else
-                {
-                    ssthresh = cwnd / 2;
-                    cwnd = MSS;
-                    slow_start = true;
-                }
-
-                //JACOB: send first packet then continue this do loop
-                cout << "timed_out" << endl;
-                exit(1);
+                ssthresh = cwnd / 2;
+                cwnd = MSS - 1;
+                dup_ack = 0;
+                slow_start = true;
+                congestion_avoidance = false;
+                fast_recovery = false;
+                retransmission = true;
             }
             else // else another error and process it
             {
                 process_error(ack_n_bytes, "recv ACK after sending data");
             }
         }
-        else
+        else if (prev_ack == p.ack_num()) // if duplicate
         {
+            if (fast_recovery)
+            {
+                cwnd += MSS - 1;
+            }
+            else
+            {
+                dup_ack++;
+            }
+
+            // if retransmit
+            if (dup_ack == 4)
+            {
+                ssthresh = cwnd / 2;
+                cwnd = ssthresh + 3 * (MSS - 1);
+                fast_recovery = true;
+                slow_start = false;
+                congestion_avoidance = false;
+                dup_ack = 0;
+            }
+
+            cout << "Receiving ACK packet " << p.ack_num() << endl;
+        }
+        else // new ack
+        {
+            if (slow_start)
+            {
+                cwnd += MSS - 1;
+                dup_ack = 0;
+
+                if (cwnd >= ssthresh)
+                {
+                    slow_start = false;
+                    congestion_avoidance = true;
+                    cwd_pkts = cwnd / MSS;
+                    pkts_sent = 0;
+                }
+            }
+            else if (congestion_avoidance)
+            {
+                if (pkts_sent == cwd_pkts)
+                {
+                    cwd_pkts = cwnd / MSS;
+                    pkts_sent = 0;
+                }
+
+                cwnd += (MSS - 1) / cwd_pkts;
+                pkts_sent++;
+            }
+            else // fast recovery
+            {
+                cwnd = ssthresh;
+                dup_ack = 0;
+                fast_recovery = false;
+                congestion_avoidance = true;
+            }
+
+            prev_ack = p.ack_num();
+
             cwnd += update_window(p, window, base_num, first_pkt);
             ack_num = (p.seq_num() + 1) % MSN;
             cout << "Receiving ACK packet " << p.ack_num() << endl;
         }
-
-        if (slow_start)
-        {
-            cwnd += MSS - 1;
-        }
-        else
-        {
-            if (pkts_sent == cwd_pkts)
-            {
-                cwd_pkts = cwnd / MSS;
-                pkts_sent = 0;
-            }
-
-            cwnd += ((MSS - 1)/cwd_pkts);
-            pkts_sent++;
-        }
-
-        if (slow_start && cwnd >= ssthresh)
-        {
-            slow_start = false;
-            cwd_pkts = cwnd / (MSS - 1);
-        }
-
     } while (n_bytes != 0);
 
     // send FIN
