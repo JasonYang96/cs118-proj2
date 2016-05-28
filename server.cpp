@@ -145,6 +145,7 @@ int main(int argc, char* argv[])
 
                     //JACOB: send first packet then continue this do loop
                     cout << "timed_out" << endl;
+                    exit(1);
                 }
                 else // else another error and process it
                 {
