@@ -8,15 +8,14 @@
 #include <netdb.h> // for getaddrinfo
 #include <ctime> // for time
 #include <cstdlib> // for srand, rand
-#include <list>
+#include <unordered_map>
 #include <fstream>
 
 using namespace std;
 
 void process_error(int status, const string &function);
 int set_up_socket(char* argv[]);
-void add_to_window(Packet_info p, list<Packet_info>& window);
-void add_consecutive_data(list<Packet_info>& window, ofstream& output, uint16_t& base_num);
+void update_window(const Packet &p, unordered_map<uint16_t, Packet_info> &window, ofstream& output, uint16_t& base_num);
 
 int main(int argc, char* argv[])
 {
@@ -60,19 +59,24 @@ int main(int argc, char* argv[])
     base_num = ack_num;
 
     // receive until a FIN segment is recv'd
-    list<Packet_info> window;
+    unordered_map<uint16_t, Packet_info> window;
     ofstream output("file");
     while (1)
     {
         n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
         process_error(n_bytes, "recv file");
-        add_to_window(Packet_info(p), window);
+        window.emplace(p.seq_num(), Packet_info(p));
 
         cout << "Debug: recv file with size " << p.data_len() << " and " << p.data().size() << endl;
         cout << "Receiving data packet " << p.seq_num() << endl;
         ack_num = (p.seq_num() + p.data_len()) % MSN;
 
-        add_consecutive_data(window, output, base_num);
+        for (auto it = window.find(base_num); it != window.end(); it = window.find(base_num))
+        {
+            output << it->second.pkt().data();
+            base_num = (base_num + it->second.pkt().data_len()) % MSN;
+            window.erase(it);
+        }
 
         if (p.fin_set()) // fin segment
         {
@@ -100,48 +104,6 @@ int main(int argc, char* argv[])
     n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
     process_error(n_bytes, "recv ACK after FIN ACK");
     cout << "Debug: Receiving ack packet after FIN ACK " << p.seq_num() << endl;
-}
-
-void add_consecutive_data(list<Packet_info>& window, ofstream& output, uint16_t& base_num)
-{
-    //find packet to start at
-    auto it = window.begin();
-    for (; it != window.end(); it++)
-    {
-        if (it->pkt().seq_num() == base_num)
-            break;
-    }
-
-    while (it != window.end() && it->pkt().seq_num() == base_num)
-    {
-        output << it->pkt().data();
-        base_num = (base_num + it->pkt().data_len()) % MSN;
-        auto temp = next(it);
-        window.erase(it);
-        it = temp;
-    }
-}
-
-void add_to_window(Packet_info p, list<Packet_info>& window)
-{
-    if (window.empty())
-    {
-        window.push_back(p);
-        return;
-    }
-
-    for (auto it = window.begin(); it != window.end(); it++)
-    {
-        if (p.pkt().seq_num() > it->pkt().seq_num())
-        {
-            // Found where it should go
-            window.insert(it, p);
-            return;
-        }
-    }
-
-    // If we get here, then we already accounted for this packet anyway
-
 }
 
 int set_up_socket(char* argv[])
