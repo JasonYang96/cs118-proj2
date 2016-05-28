@@ -67,6 +67,8 @@ int main(int argc, char* argv[])
     unordered_map<uint16_t, Packet_info> window;
     size_t cwnd = MSS - 1;
     size_t ssthresh = INITIAL_SSTHRESH;
+    size_t cwd_pkts = 0;
+    size_t pkts_sent = 0;
     bool slow_start = true;
     // send file
     do
@@ -116,66 +118,71 @@ int main(int argc, char* argv[])
         timeradd(&base_time, &timeout, &max_time);
 
         // recv ACK
-        do
+        struct timeval curr_time;
+        gettimeofday(&curr_time, NULL);
+
+        struct timeval time_left;
+        timersub(&max_time, &curr_time, &time_left);
+
+        status = setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&time_left, sizeof(time_left));
+        process_error(status, "setsockopt");
+
+        int ack_n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
+        if (ack_n_bytes == -1) //error
         {
-            struct timeval curr_time;
-            gettimeofday(&curr_time, NULL);
-
-            struct timeval time_left;
-            timersub(&max_time, &curr_time, &time_left);
-
-            status = setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&time_left, sizeof(time_left));
-            process_error(status, "setsockopt");
-
-            int ack_n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
-            if (ack_n_bytes == -1) //error
+            // check if timed out
+            if (errno == EAGAIN || EWOULDBLOCK || EINPROGRESS)
             {
-                // check if timed out
-                if (errno == EAGAIN || EWOULDBLOCK || EINPROGRESS)
+                // adjust cwnd and ssthresh
+                // TODO: IMPLEMENT TCP RENO
+                if (slow_start)
                 {
-                    // adjust cwnd and ssthresh
-                    // TODO: MAKE SURE THIS IS RIGHT
-                    if (slow_start)
-                    {
-                        ssthresh = cwnd / 2;
-                        cwnd = MSS;
-                    }
-                    else
-                    {
-                        ssthresh = cwnd / 2;
-                        cwnd = MSS;
-                        slow_start = true;
-                    }
+                    ssthresh = cwnd / 2;
+                    cwnd = MSS;
+                }
+                else
+                {
+                    ssthresh = cwnd / 2;
+                    cwnd = MSS;
+                    slow_start = true;
+                }
 
-                    //JACOB: send first packet then continue this do loop
-                    cout << "timed_out" << endl;
-                    exit(1);
-                }
-                else // else another error and process it
-                {
-                    process_error(ack_n_bytes, "recv ACK after sending data");
-                }
+                //JACOB: send first packet then continue this do loop
+                cout << "timed_out" << endl;
+                exit(1);
             }
-            else
+            else // else another error and process it
             {
-                cwnd += update_window(p, window, base_num, first_pkt);
-                ack_num = (p.seq_num() + 1) % MSN;
-                cout << "Receiving ACK packet " << p.ack_num() << endl;
+                process_error(ack_n_bytes, "recv ACK after sending data");
             }
-        } while (p.ack_num() < seq_num);
-
-        if (slow_start)
-        {
-            cwnd *= 2;
         }
         else
         {
-            cwnd += MSS;
+            cwnd += update_window(p, window, base_num, first_pkt);
+            ack_num = (p.seq_num() + 1) % MSN;
+            cout << "Receiving ACK packet " << p.ack_num() << endl;
         }
 
-        if (cwnd >= ssthresh)
+        if (slow_start)
+        {
+            cwnd += MSS - 1;
+        }
+        else
+        {
+            if (pkts_sent == cwd_pkts)
+            {
+                cwd_pkts = cwnd / MSS;
+                pkts_sent = 0;
+            }
+
+            cwnd += ((MSS - 1)/cwd_pkts);
+            pkts_sent++;
+        }
+
+        if (slow_start && cwnd >= ssthresh)
         {
             slow_start = false;
+            cwd_pkts = cwnd / (MSS - 1);
         }
 
     } while (n_bytes != 0);
