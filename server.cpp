@@ -9,7 +9,7 @@
 #include <sys/stat.h> // for open
 #include <fcntl.h> // for open
 #include <unistd.h> // for close, read
-#include <list> // for list
+#include <unordered_map> // for map
 #include <sys/time.h> // for socket timeout
 #include <errno.h>
 
@@ -18,8 +18,7 @@ using namespace std;
 void process_error(int status, const string &function);
 int open_file(char* file);
 int set_up_socket(char* port);
-size_t update_window(Packet p, list<Packet_info> &window, uint16_t &base_num);
-Packet_info get_first_pkt_info(list<Packet_info> &window, uint16_t &base_num);
+size_t update_window(Packet p, unordered_map<uint16_t, Packet_info> &window, uint16_t &base_num, unordered_map<uint16_t, Packet_info>::const_iterator &first_pkt);
 
 int main(int argc, char* argv[])
 {
@@ -65,8 +64,8 @@ int main(int argc, char* argv[])
     cout << "Receiving ACK packet " << p.ack_num() << endl;
     ack_num = (p.seq_num() + 1) % MSN;
 
-    list<Packet_info> window;
-    size_t cwnd = MSS;
+    unordered_map<uint16_t, Packet_info> window;
+    size_t cwnd = MSS - 1;
     size_t ssthresh = INITIAL_SSTHRESH;
     bool slow_start = true;
     // send file
@@ -93,17 +92,22 @@ int main(int argc, char* argv[])
             Packet_info pkt_info = Packet_info(p);
             status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
             process_error(status, "sending packet");
-            window.push_back(pkt_info);
+            window.emplace(seq_num, pkt_info);
             cout << "Sending data packet " << seq_num << endl;
             seq_num = (seq_num + p.data_len()) % MSN;
             cout << "Debug: sending packet of size " << sizeof(p) + 1 << " with size " << p.data_len() << " and " << p.data().size() << endl;
         } while (cwnd > 0 && n_bytes != 0);
 
         // set up timevals
-        Packet_info first_pkt = get_first_pkt_info(window, base_num);
-        struct timeval base_time = first_pkt.get_time_sent();
+        unordered_map<uint16_t, Packet_info>::const_iterator first_pkt = window.find(base_num);
+        if (first_pkt == window.end())
+        {
+            cerr << "could not find base_num packet in window" << endl;
+            exit(1);
+        }
+        struct timeval base_time = first_pkt->second.get_time_sent();
         
-        // create 500 ms timeval
+        // create timeout timeval
         struct timeval timeout;
         timeout.tv_usec = INITIAL_TIMEOUT * 1000; // microseconds
 
@@ -154,7 +158,7 @@ int main(int argc, char* argv[])
             }
             else
             {
-                cwnd += update_window(p, window, base_num);
+                cwnd += update_window(p, window, base_num, first_pkt);
                 ack_num = (p.seq_num() + 1) % MSN;
                 cout << "Receiving ACK packet " << p.ack_num() << endl;
             }
@@ -200,46 +204,28 @@ int main(int argc, char* argv[])
     seq_num = (seq_num + 1) % MSN;
 }
 
-// TODO: UPDATE FIRST PKT
-size_t update_window(Packet p, list<Packet_info>& window, uint16_t &base_num)
+size_t update_window(Packet p, unordered_map<uint16_t, Packet_info> &window, uint16_t &base_num, unordered_map<uint16_t, Packet_info>::const_iterator &first_pkt)
 {
     size_t n_removed = 0;
 
-    auto it = window.begin();
-    for (; it != window.end(); it++)
+    unordered_map<uint16_t, Packet_info>::const_iterator found;
+    while (base_num < p.ack_num())
     {
-        if (it->pkt().seq_num() == base_num)
-            break;
+        found = window.find(base_num);
+        if (found == window.end())
+        {
+            cerr << "could not find base_num packet in window" << endl;
+            exit(1);
+        }
+        uint16_t len = found->second.pkt().data_len();
+        window.erase(base_num);
+        n_removed += len;
+        base_num = (base_num + len) % MSN;
     }
 
-    while ((it != window.end()) && ((it->pkt().seq_num() + it->pkt().data_len() > MSN) || (it->pkt().seq_num() < p.ack_num())))
-    {
-        n_removed += it->pkt().data_len();
-        base_num = (base_num + it->pkt().data_len()) % MSN;
-        auto temp = next(it);
-        window.erase(it);
-        it = temp;
-    }
+    first_pkt = found;
 
     return n_removed;
-}
-
-Packet_info get_first_pkt_info(list<Packet_info> &window, uint16_t &base_num)
-{
-    auto it = window.begin();
-    for (; it != window.end(); it++)
-    {
-        if (it->pkt().seq_num() == base_num)
-            break;
-    }
-
-    if (it == window.end())
-    {
-        cerr << "Passed in bad base_num to get_first_pkt_info" << endl;
-        exit(1);
-    }
-
-    return *it;
 }
 
 int open_file(char* file)
