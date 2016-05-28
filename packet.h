@@ -28,37 +28,37 @@ public:
         strcpy(m_data, data);
     }
 
-    bool syn_set()
+    bool syn_set() const
     {
         return m_flags[2];
     }
 
-    bool ack_set()
+    bool ack_set() const
     {
         return m_flags[1];
     }
 
-    bool fin_set()
+    bool fin_set() const
     {
         return m_flags[0];
     }
 
-    uint16_t seq_num()
+    uint16_t seq_num() const
     {
         return m_seq_num;
     }
 
-    uint16_t ack_num()
+    uint16_t ack_num() const
     {
         return m_ack_num;
     }
 
-    uint16_t data_len()
+    uint16_t data_len() const
     {
         return m_data_len;
     }
 
-    std::string data()
+    std::string data() const
     {
         return m_data;
     }
@@ -81,12 +81,12 @@ public:
         gettimeofday(&m_time_sent, NULL);
     }
 
-    Packet pkt()
+    Packet pkt() const
     {
         return m_p;
     }
 
-    struct timeval get_time_sent()
+    struct timeval get_time_sent() const
     {
         return m_time_sent;
     }
