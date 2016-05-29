@@ -15,7 +15,7 @@ using namespace std;
 
 void process_error(int status, const string &function);
 int set_up_socket(char* argv[]);
-void update_window(const Packet &p, unordered_map<uint16_t, Packet_info> &window, ofstream& output, uint16_t& base_num);
+bool valid_pkt(const Packet &p, size_t base_num);
 
 int main(int argc, char* argv[])
 {
@@ -63,11 +63,16 @@ int main(int argc, char* argv[])
     ofstream output("file");
     while (1)
     {
-        n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
-        process_error(n_bytes, "recv file");
-        window.emplace(p.seq_num(), Packet_info(p));
+        // discard invalid acks
+        do
+        {
+            n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
+            process_error(n_bytes, "recv file");
+        } while (!valid_pkt(p, base_num));
         ack_num = (p.seq_num() + p.data_len()) % MSN;
 
+        // update window
+        window.emplace(p.seq_num(), Packet_info(p));
         for (auto it = window.find(base_num); it != window.end(); it = window.find(base_num))
         {
             output << it->second.pkt().data();
@@ -75,9 +80,9 @@ int main(int argc, char* argv[])
             window.erase(it);
         }
 
+        // send FIN ACK if FIN segment
         if (p.fin_set())
         {
-            // send FIN ACK if FIN segment
             cout << "Debug: recv FIN packet with seq " << p.seq_num() << endl;
             ack_num = (ack_num + 1) % MSN; //consumed fin segment
             p = Packet(0, 1, 1, seq_num, ack_num, 0, "");
@@ -101,9 +106,43 @@ int main(int argc, char* argv[])
     output.close();
 
     // recv ACK
-    n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
-    process_error(n_bytes, "recv ACK after FIN ACK");
-    cout << "Debug: Receiving ack packet after FIN ACK " << p.seq_num() << endl;
+    do
+    {
+        n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
+        process_error(n_bytes, "recv ACK after FIN ACK");
+        cout << "Debug: Receiving ack packet after FIN ACK " << p.seq_num() << endl;
+    } while (!valid_pkt(p, base_num)); // discard invalid acks
+}
+
+bool valid_pkt(const Packet &p, size_t base_num)
+{
+    uint16_t seq = p.seq_num();
+    uint16_t max = (base_num + MSN/2) % MSN;
+
+    if (base_num < max) // no overflow of window
+    {
+        if (seq >= base_num && seq <= max)
+        {
+            return true;
+        }
+        else
+        {
+            cout << "seq_num is " << seq << " and base_num is " << base_num << " and max is " << max << endl;
+            return false;
+        }
+    }
+    else // window overflowed
+    {
+        if (seq > max && seq < base_num)
+        {
+            cout << "seq_num is " << seq << " and base_num is " << base_num << " and max is " << max << endl;
+            return false;
+        }
+        else
+        {
+            return true;
+        }
+    }
 }
 
 int set_up_socket(char* argv[])

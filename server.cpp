@@ -19,6 +19,7 @@ void process_error(int status, const string &function);
 int open_file(char* file);
 int set_up_socket(char* port);
 size_t update_window(Packet p, unordered_map<uint16_t, Packet_info> &window, uint16_t &base_num, unordered_map<uint16_t, Packet_info>::const_iterator &first_pkt);
+bool valid_ack(const Packet &p, size_t base_num);
 
 int main(int argc, char* argv[])
 {
@@ -40,6 +41,7 @@ int main(int argc, char* argv[])
     // select random seq_num
     srand(time(NULL));
     uint16_t seq_num = rand() % MSN;
+    seq_num = 30710;
 
     // recv SYN from client
     do
@@ -59,18 +61,21 @@ int main(int argc, char* argv[])
     base_num = seq_num;
 
     // recv ACK
-    n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
-    process_error(n_bytes, "recv ACK after SYN ACK");
+    do
+    {
+        n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
+        process_error(n_bytes, "recv ACK after SYN ACK");
+    } while (!valid_ack(p, base_num)); // discard invalid ack
     cout << "Receiving ACK packet " << p.ack_num() << endl;
     ack_num = (p.seq_num() + 1) % MSN;
 
     unordered_map<uint16_t, Packet_info> window;
-    size_t cwnd = MSS - 1;
-    size_t cwnd_used = 0;
-    size_t ssthresh = INITIAL_SSTHRESH;
-    size_t cwd_pkts = 0;
-    size_t pkts_sent = 0;
-    int dup_ack = 0;
+    double cwnd = min(MSS - 1, MSN / (size_t) 2);
+    uint16_t cwnd_used = 0;
+    uint16_t ssthresh = INITIAL_SSTHRESH;
+    uint16_t cwd_pkts = 0;
+    uint16_t pkts_sent = 0;
+    uint16_t dup_ack = 0;
     uint16_t prev_ack = seq_num;
     bool slow_start = true;
     bool congestion_avoidance = false;
@@ -95,7 +100,7 @@ int main(int argc, char* argv[])
                 // make sure recv all that we can
                 do
                 {
-                    size_t n_to_send = min(cwnd, MSS - 1);
+                    size_t n_to_send = min((size_t)cwnd, MSS - 1);
                     n_bytes = read(file_fd, &data[buf_pos], n_to_send);
                     buf_pos += n_bytes;
                     cwnd_used += n_bytes;
@@ -139,27 +144,34 @@ int main(int argc, char* argv[])
         status = setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&time_left, sizeof(time_left));
         process_error(status, "setsockopt");
 
-        int ack_n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
-        if (ack_n_bytes == -1) //error
+        do
         {
-            // check if timed out
-            if (errno == EAGAIN || EWOULDBLOCK || EINPROGRESS)
+            int ack_n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
+            if (ack_n_bytes == -1) //error
             {
-                // adjust cwnd and ssthresh
-                ssthresh = cwnd / 2;
-                cwnd = MSS - 1;
-                dup_ack = 0;
-                slow_start = true;
-                congestion_avoidance = false;
-                fast_recovery = false;
-                retransmission = true;
+                // check if timed out
+                if (errno == EAGAIN || EWOULDBLOCK || EINPROGRESS)
+                {
+                    // adjust cwnd and ssthresh
+                    ssthresh = cwnd / 2;
+                    cwnd = MSS - 1;
+                    dup_ack = 0;
+                    slow_start = true;
+                    congestion_avoidance = false;
+                    fast_recovery = false;
+                    retransmission = true;
+                    break;
+                }
+                else // else another error and process it
+                {
+                    process_error(ack_n_bytes, "recv ACK after sending data");
+                }
             }
-            else // else another error and process it
-            {
-                process_error(ack_n_bytes, "recv ACK after sending data");
-            }
-        }
-        else if (prev_ack == p.ack_num()) // if duplicate
+        } while (!valid_ack(p, base_num));
+        if (retransmission)
+            continue;
+
+        if (prev_ack == p.ack_num()) // if duplicate
         {
             if (fast_recovery)
             {
@@ -205,8 +217,7 @@ int main(int argc, char* argv[])
                     cwd_pkts = cwnd / MSS;
                     pkts_sent = 0;
                 }
-
-                cwnd += (MSS - 1) / cwd_pkts;
+                cwnd += (MSS - 1) / (double) cwd_pkts;
                 pkts_sent++;
             }
             else // fast recovery
@@ -218,11 +229,14 @@ int main(int argc, char* argv[])
             }
 
             prev_ack = p.ack_num();
-
             cwnd_used -= update_window(p, window, base_num, first_pkt);
             ack_num = (p.seq_num() + 1) % MSN;
             cout << "Receiving ACK packet " << p.ack_num() << endl;
         }
+
+        // make sure cwnd is not greater than MSN/2
+        cwnd = min(cwnd, MSN / 2.0);
+
     } while (n_bytes != 0);
 
     // send FIN
@@ -247,6 +261,38 @@ int main(int argc, char* argv[])
     process_error(status, "sending ACK after FIN ACK");
     cout << "Sending data packet " << seq_num << endl;
     seq_num = (seq_num + 1) % MSN;
+}
+
+bool valid_ack(const Packet &p, size_t base_num)
+{
+    uint16_t ack = p.ack_num();
+    uint16_t max = (base_num + MSN/2) % MSN;
+
+    if (base_num < max) // no overflow of window
+    {
+        if (ack >= base_num && ack <= max)
+        {
+
+            return true;
+        }
+        else
+        {
+            cout << "ack_num is " << ack << " and base_num is " << base_num << " and max is " << max << endl;
+            return false;
+        }
+    }
+    else // window overflowed
+    {
+        if (ack > max && ack < base_num)
+        {
+            cout << "ack_num is " << ack << " and base_num is " << base_num << " and max is " << max << endl;
+            return false;
+        }
+        else
+        {
+            return true;
+        }
+    }
 }
 
 size_t update_window(Packet p, unordered_map<uint16_t, Packet_info> &window, uint16_t &base_num, unordered_map<uint16_t, Packet_info>::const_iterator &first_pkt)
