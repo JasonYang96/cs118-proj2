@@ -81,6 +81,7 @@ private:
 class Packet_info
 {
 public:
+    Packet_info() = default;
     Packet_info(Packet p)
     {
         m_p = p;

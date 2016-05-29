@@ -21,6 +21,7 @@ int open_file(char* file);
 int set_up_socket(char* port);
 uint16_t update_window(const Packet &p, unordered_map<uint16_t, Packet_info> &window, uint16_t &base_num);
 bool valid_ack(const Packet &p, uint16_t base_num);
+struct timeval time_left(unordered_map<uint16_t, Packet_info> &window, uint16_t base_num);
 
 int main(int argc, char* argv[])
 {
@@ -36,8 +37,11 @@ int main(int argc, char* argv[])
     struct sockaddr_storage recv_addr;
     socklen_t addr_len = sizeof(recv_addr);
     int status, n_bytes;
-    uint16_t ack_num, base_num;
+    uint16_t ack_num, base_num, syn_fyn;
     Packet p;
+
+    unordered_map<uint16_t, Packet_info> window;
+    Packet_info pkt_info;
 
     // select random seq_num
     srand(time(NULL));
@@ -54,8 +58,11 @@ int main(int argc, char* argv[])
 
     // sending SYN ACK
     p = Packet(1, 1, 0, seq_num, ack_num, 0, 0, "");
+    pkt_info = Packet_info(p);
     status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
     process_error(status, "sending SYN ACK");
+    window.emplace(seq_num, pkt_info);
+    syn_fyn = seq_num;
     cout << "Debug: Sending SYN ACK with seq " << seq_num << endl;
     seq_num = (seq_num + 1) % MSN;
     base_num = seq_num;
@@ -63,20 +70,23 @@ int main(int argc, char* argv[])
     // recv ACK
     do
     {
+        struct timeval time_left_tv= time_left(window, syn_fyn);
+        status = setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&time_left_tv, sizeof(time_left_tv));
+        process_error(status, "setsockopt");
         n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
         process_error(n_bytes, "recv ACK after SYN ACK");
     } while (!valid_ack(p, base_num)); // discard invalid ack
+    uint16_t prev_ack = p.ack_num();
+    update_window(p, window, syn_fyn);
     cout << "Receiving ACK packet " << p.ack_num() << endl;
     ack_num = (p.seq_num() + 1) % MSN;
 
-    unordered_map<uint16_t, Packet_info> window;
     double cwnd = min(MSS - 1, MSN / 2);
     uint16_t cwnd_used = 0;
     uint16_t ssthresh = INITIAL_SSTHRESH;
     uint16_t cwd_pkts = 0;
     uint16_t pkts_sent = 0;
     uint16_t dup_ack = 0;
-    uint16_t prev_ack = seq_num;
     uint16_t recv_window = UINT16_MAX;
     bool slow_start = true;
     bool congestion_avoidance = false;
@@ -88,6 +98,8 @@ int main(int argc, char* argv[])
         if (retransmission) // retransmit missing segment
         {
             // Jacob: take care of retransmission
+            cout << "retransmission not yet implemented" << endl;
+            exit(1);
         }
         else // transmit new segment(s), as allowed
         {
@@ -109,7 +121,7 @@ int main(int argc, char* argv[])
 
                 // send packet
                 p = Packet(0, 0, 0, seq_num, ack_num, buf_pos, 0, data.c_str());
-                Packet_info pkt_info = Packet_info(p);
+                pkt_info = Packet_info(p);
                 status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
                 process_error(status, "sending packet");
                 window.emplace(seq_num, pkt_info);
@@ -118,27 +130,12 @@ int main(int argc, char* argv[])
             }
         }
 
-        // set up timevals
-        unordered_map<uint16_t, Packet_info>::const_iterator first_pkt = window.find(base_num);
-        if (first_pkt == window.end())
-        {
-            cerr << "could not find base_num packet in window" << endl;
-            exit(1);
-        }
-        struct timeval max_time = first_pkt->second.get_max_time();
-
         // recv ACK
-        struct timeval curr_time;
-        gettimeofday(&curr_time, NULL);
-
-        struct timeval time_left;
-        timersub(&max_time, &curr_time, &time_left);
-
-        status = setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&time_left, sizeof(time_left));
-        process_error(status, "setsockopt");
-
         do
         {
+            struct timeval time_left_tv= time_left(window, base_num);
+            status = setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&time_left_tv, sizeof(time_left_tv));
+            process_error(status, "setsockopt");
             int ack_n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
             if (ack_n_bytes == -1) //error
             {
@@ -231,26 +228,31 @@ int main(int argc, char* argv[])
         cwnd = min(cwnd, MSN / 2.0);
 
         recv_window = p.recv_window();
-
     } while (n_bytes != 0 || window.size() != 0);
-
-    // TODO: keep recv until window size is not 0
 
     // send FIN
     p = Packet(0, 0, 1, seq_num, ack_num, 0, 0, "");
+    pkt_info = Packet_info(p);
     status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
     process_error(status, "sending FIN");
+    window.emplace(seq_num, pkt_info);
+    syn_fyn = seq_num;
     cout << "Sending data packet " << seq_num << endl;
     seq_num = (seq_num + 1) % MSN;
 
     // recv FIN ACK
     do
     {
+        struct timeval time_left_tv= time_left(window, syn_fyn);
+        status = setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&time_left_tv, sizeof(time_left_tv));
+        process_error(status, "setsockopt");
         n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
         process_error(n_bytes, "recv FIN ACK");
-        cout << "Receiving ACK packet " << p.ack_num() << endl;
-        ack_num = (p.seq_num() + 1) % MSN;
     } while (!p.fin_set() || !p.ack_set());
+    prev_ack = p.ack_num();
+    update_window(p, window, syn_fyn);
+    cout << "Receiving ACK packet " << p.ack_num() << endl;
+    ack_num = (p.seq_num() + 1) % MSN;
 
     // send ACK after FIN ACK
     p = Packet(0, 1, 0, seq_num, ack_num, 0, 0, "");
@@ -258,6 +260,25 @@ int main(int argc, char* argv[])
     process_error(status, "sending ACK after FIN ACK");
     cout << "Sending data packet " << seq_num << endl;
     seq_num = (seq_num + 1) % MSN;
+}
+
+struct timeval time_left(unordered_map<uint16_t, Packet_info> &window, uint16_t base_num)
+{
+    auto first_pkt = window.find(base_num);
+    if (first_pkt == window.end())
+    {
+        cerr << "could not find base_num packet in window, in time_left function" << endl;
+        exit(1);
+    }
+    struct timeval max_time = first_pkt->second.get_max_time();
+
+    struct timeval curr_time;
+    gettimeofday(&curr_time, NULL);
+
+    struct timeval time_left;
+    timersub(&max_time, &curr_time, &time_left);
+
+    return time_left;
 }
 
 bool valid_ack(const Packet &p, uint16_t base_num)
@@ -295,26 +316,36 @@ bool valid_ack(const Packet &p, uint16_t base_num)
 uint16_t update_window(const Packet &p, unordered_map<uint16_t, Packet_info> &window, uint16_t &base_num)
 {
     uint16_t n_removed = 0;
+    bool syn_fyn = false;
 
     auto found = window.find(base_num);
     if (found == window.end())
     {
-        cerr << "could not find base_num packet in window" << endl;
+        cerr << "could not find base_num packet with base_num " << base_num << " in window, update_window" << endl;
         exit(1);
     }
 
     while (base_num < p.ack_num() || ((base_num + found->second.pkt().data_len()) % MSN) == p.ack_num())
     {
+        // take care of syn and fyn acking
+        if (found->second.pkt().syn_set() || found->second.pkt().fin_set())
+        {
+            syn_fyn = true;
+        }
+
         found = window.find(base_num);
         if (found == window.end())
         {
-            cerr << "could not find base_num packet in window" << endl;
+            cerr << "could not find base_num packet with base_num " << base_num << " in window, update_window" << endl;
             exit(1);
         }
         uint16_t len = found->second.pkt().data_len();
         window.erase(base_num);
         n_removed += len;
         base_num = (base_num + len) % MSN;
+
+        if (syn_fyn)
+            break;
     }
 
     return n_removed;
