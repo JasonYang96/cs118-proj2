@@ -178,7 +178,6 @@ bool valid_pkt(const Packet &p, uint16_t base_num)
         }
         else
         {
-            cout << "seq_num is " << seq << " and base_num is " << base_num << " and max is " << max << endl;
             return false;
         }
     }
@@ -186,7 +185,6 @@ bool valid_pkt(const Packet &p, uint16_t base_num)
     {
         if (seq > max && seq < base_num)
         {
-            cout << "seq_num is " << seq << " and base_num is " << base_num << " and max is " << max << endl;
             return false;
         }
         else
