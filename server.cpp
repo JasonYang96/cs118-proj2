@@ -240,7 +240,7 @@ int main(int argc, char* argv[])
 
         recv_window = p.recv_window();
 
-    } while (n_bytes != 0);
+    } while (n_bytes != 0 || window.size() != 0);
 
     // TODO: keep recv until window size is not 0
 
