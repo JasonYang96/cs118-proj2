@@ -239,7 +239,7 @@ int main(int argc, char* argv[])
     process_error(status, "sending FIN");
     window.emplace(seq_num, pkt_info);
     syn_fyn = seq_num;
-    cout << "Sending data packet " << seq_num << endl;
+    cout << "Debugging: Sending FIN packet " << seq_num << endl;
     seq_num = (seq_num + 1) % MSN;
 
     // recv FIN ACK
@@ -261,8 +261,34 @@ int main(int argc, char* argv[])
     p = Packet(0, 1, 0, seq_num, ack_num, 0, 0, "");
     status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
     process_error(status, "sending ACK after FIN ACK");
-    cout << "Sending data packet " << seq_num << endl;
-    seq_num = (seq_num + 1) % MSN;
+    cout << "Debugging: Sending Ack after FIN ACK " << seq_num << endl;
+    window.emplace(seq_num, pkt_info);
+
+    // make sure client receives ACK after FIN ACK
+    do
+    {
+        struct timeval time_left_tv= time_left(window, seq_num);
+        status = setsockopt(sockfd, SOL_SOCKET,SO_RCVTIMEO, (char *)&time_left_tv, sizeof(time_left_tv));
+        process_error(status, "setsockopt");
+        n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
+        if (n_bytes == -1) //error
+        {
+            // check if timed out
+            if (errno == EAGAIN || EWOULDBLOCK || EINPROGRESS)
+            {
+                break;
+            }
+            else // else another error and process it
+            {
+                process_error(n_bytes, "checking to see if recv FIN ACK again");
+            }
+        }
+        else
+        {
+            // TODO: retransmit if not an error
+            cout << "should not get here" << endl;
+        }
+    } while (!p.fin_set() || !p.ack_set());
 }
 
 struct timeval time_left(unordered_map<uint16_t, Packet_info> &window, uint16_t base_num)
