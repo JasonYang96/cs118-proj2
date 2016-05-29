@@ -15,7 +15,7 @@ class Packet
 {
 public:
     Packet() = default;
-    Packet(bool syn, bool ack, bool fin, uint16_t seq_num, uint16_t ack_num, uint16_t data_len, const char *data)
+    Packet(bool syn, bool ack, bool fin, uint16_t seq_num, uint16_t ack_num, uint16_t data_len, uint16_t recv_window, const char *data)
     {
         m_flags[3] = 0;
         m_flags[2] = syn;
@@ -24,6 +24,7 @@ public:
         m_seq_num = seq_num;
         m_ack_num = ack_num;
         m_data_len = data_len;
+        m_recv_window = recv_window;
         strcpy(m_data, data);
     }
 
@@ -52,14 +53,14 @@ public:
         return m_ack_num;
     }
 
-    uint16_t recv_window() const
-    {
-        return m_recv_window;
-    }
-
     uint16_t data_len() const
     {
         return m_data_len;
+    }
+
+    uint16_t recv_window() const
+    {
+        return m_recv_window;
     }
 
     std::string data() const

@@ -53,7 +53,7 @@ int main(int argc, char* argv[])
     ack_num = (p.seq_num() + 1) % MSN;
 
     // sending SYN ACK
-    p = Packet(1, 1, 0, seq_num, ack_num, 0, "");
+    p = Packet(1, 1, 0, seq_num, ack_num, 0, 0, "");
     status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
     process_error(status, "sending SYN ACK");
     cout << "Debug: Sending SYN ACK with seq " << seq_num << endl;
@@ -77,6 +77,7 @@ int main(int argc, char* argv[])
     uint16_t pkts_sent = 0;
     uint16_t dup_ack = 0;
     uint16_t prev_ack = seq_num;
+    uint16_t recv_window = UINT16_MAX;
     bool slow_start = true;
     bool congestion_avoidance = false;
     bool fast_recovery = false;
@@ -100,14 +101,14 @@ int main(int argc, char* argv[])
                 // make sure recv all that we can
                 do
                 {
-                    size_t n_to_send = (size_t) min(cwnd - cwnd_used, MSS - 1.0);
+                    size_t n_to_send = (size_t) min(cwnd - cwnd_used, min(MSS - 1.0, (double) recv_window));
                     n_bytes = read(file_fd, &data[buf_pos], n_to_send);
                     buf_pos += n_bytes;
                     cwnd_used += n_bytes;
                 } while (cwnd_used < floor(cwnd) && n_bytes != 0 && buf_pos != MSS - 1);
 
                 // send packet
-                p = Packet(0, 0, 0, seq_num, ack_num, buf_pos, data.c_str());
+                p = Packet(0, 0, 0, seq_num, ack_num, buf_pos, 0, data.c_str());
                 Packet_info pkt_info = Packet_info(p);
                 status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
                 process_error(status, "sending packet");
@@ -237,12 +238,14 @@ int main(int argc, char* argv[])
         // make sure cwnd is not greater than MSN/2
         cwnd = min(cwnd, MSN / 2.0);
 
+        recv_window = p.recv_window();
+
     } while (n_bytes != 0);
 
     // TODO: keep recv until window size is not 0
 
     // send FIN
-    p = Packet(0, 0, 1, seq_num, ack_num, 0, "");
+    p = Packet(0, 0, 1, seq_num, ack_num, 0, 0, "");
     status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
     process_error(status, "sending FIN");
     cout << "Sending data packet " << seq_num << endl;
@@ -258,7 +261,7 @@ int main(int argc, char* argv[])
     } while (!p.fin_set() || !p.ack_set());
 
     // send ACK after FIN ACK
-    p = Packet(0, 1, 0, seq_num, ack_num, 0, "");
+    p = Packet(0, 1, 0, seq_num, ack_num, 0, 0, "");
     status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
     process_error(status, "sending ACK after FIN ACK");
     cout << "Sending data packet " << seq_num << endl;

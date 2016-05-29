@@ -13,6 +13,8 @@
 
 using namespace std;
 
+const uint16_t MAX_RECV_WINDOW = 30720;
+
 void process_error(int status, const string &function);
 int set_up_socket(char* argv[]);
 bool valid_pkt(const Packet &p, uint16_t base_num);
@@ -34,8 +36,9 @@ int main(int argc, char* argv[])
     uint16_t seq_num = rand() % MSN;
     uint16_t ack_num, base_num;
 
+
     // send SYN segment
-    p = Packet(1, 0, 0, seq_num, 0, 0, "");
+    p = Packet(1, 0, 0, seq_num, 0, 0, MAX_RECV_WINDOW, "");
     status = send(sockfd, (void *) &p, sizeof(p), 0);
     process_error(status, "sending SYN");
     seq_num = (seq_num + 1) % MSN; // SYN packet takes up 1 sequence
@@ -51,7 +54,7 @@ int main(int argc, char* argv[])
     ack_num = (p.seq_num() + 1) % MSN;
 
     // send ACK after SYN ACK
-    p = Packet(0, 1, 0, seq_num, ack_num, 0, "");
+    p = Packet(0, 1, 0, seq_num, ack_num, 0, MAX_RECV_WINDOW, "");
     status = send(sockfd, (void *) &p, sizeof(p), 0);
     process_error(status, "sending ACK after SYN ACK");
     cout << "Sending ACK packet " << p.ack_num() << endl;
@@ -85,7 +88,7 @@ int main(int argc, char* argv[])
         {
             cout << "Debug: recv FIN packet with seq " << p.seq_num() << endl;
             ack_num = (ack_num + 1) % MSN; //consumed fin segment
-            p = Packet(0, 1, 1, seq_num, ack_num, 0, "");
+            p = Packet(0, 1, 1, seq_num, ack_num, 0, MAX_RECV_WINDOW, "");
             status = send(sockfd, (void *) &p, sizeof(p), 0);
             process_error(status, "sending FIN ACK");
             cout << "Sending ACK packet " << p.ack_num() << endl;
@@ -96,7 +99,7 @@ int main(int argc, char* argv[])
         {
             cout << "Debug: recv file with size " << p.data_len() << " and " << p.data().size() << endl;
             cout << "Receiving data packet " << p.seq_num() << endl;
-            p = Packet(0, 1, 0, seq_num, ack_num, 0, "");
+            p = Packet(0, 1, 0, seq_num, ack_num, 0, MAX_RECV_WINDOW, "");
             status = send(sockfd, (void *) &p, sizeof(p), 0);
             process_error(status, "sending ACK for data packet");
             cout << "Sending ACK packet " << p.ack_num() << endl;
