@@ -74,6 +74,7 @@ int main(int argc, char* argv[])
         status = setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&time_left_tv, sizeof(time_left_tv));
         process_error(status, "setsockopt");
         n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
+        // TODO: PROCESS_RECV
         process_error(n_bytes, "recv ACK after SYN ACK");
     } while (!valid_ack(p, base_num)); // discard invalid ack
     uint16_t prev_ack = p.ack_num();
@@ -137,6 +138,7 @@ int main(int argc, char* argv[])
             status = setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&time_left_tv, sizeof(time_left_tv));
             process_error(status, "setsockopt");
             int ack_n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
+            // TODO: PROCESS_RECV
             if (ack_n_bytes == -1) //error
             {
                 // check if timed out
@@ -247,6 +249,7 @@ int main(int argc, char* argv[])
         status = setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&time_left_tv, sizeof(time_left_tv));
         process_error(status, "setsockopt");
         n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
+        // TODO: PROCESS_RECV
         process_error(n_bytes, "recv FIN ACK");
     } while (!p.fin_set() || !p.ack_set());
     prev_ack = p.ack_num();
@@ -378,7 +381,7 @@ int open_file(char* file)
     }
 
     // TODO: FOR DEBUGGING PURPOSES ONLY, GET RID WHEN DONE
-    cout << "file is " << buf.st_size << " bytes" << endl;
+    cout << "Debugging: file is " << buf.st_size << " bytes" << endl;
 
     return file_fd;
 }
