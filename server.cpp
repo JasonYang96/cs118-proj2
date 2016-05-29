@@ -11,6 +11,7 @@
 #include <unistd.h> // for close, read
 #include <unordered_map> // for map
 #include <sys/time.h> // for socket timeout
+#include <cmath> // for floor
 #include <errno.h>
 
 using namespace std;
@@ -18,7 +19,7 @@ using namespace std;
 void process_error(int status, const string &function);
 int open_file(char* file);
 int set_up_socket(char* port);
-size_t update_window(Packet p, unordered_map<uint16_t, Packet_info> &window, uint16_t &base_num, unordered_map<uint16_t, Packet_info>::const_iterator &first_pkt);
+size_t update_window(const Packet &p, unordered_map<uint16_t, Packet_info> &window, uint16_t &base_num);
 bool valid_ack(const Packet &p, size_t base_num);
 
 int main(int argc, char* argv[])
@@ -41,7 +42,6 @@ int main(int argc, char* argv[])
     // select random seq_num
     srand(time(NULL));
     uint16_t seq_num = rand() % MSN;
-    seq_num = 30710;
 
     // recv SYN from client
     do
@@ -90,7 +90,7 @@ int main(int argc, char* argv[])
         }
         else // transmit new segment(s), as allowed
         {
-            while (cwnd_used < cwnd && n_bytes != 0)
+            while (floor(cwnd) - cwnd_used >= 19 && n_bytes != 0)
             {
                 string data;
                 size_t buf_pos = 0;
@@ -100,11 +100,11 @@ int main(int argc, char* argv[])
                 // make sure recv all that we can
                 do
                 {
-                    size_t n_to_send = min((size_t)cwnd, MSS - 1);
+                    size_t n_to_send = min((size_t)(cwnd - cwnd_used), MSS - 1);
                     n_bytes = read(file_fd, &data[buf_pos], n_to_send);
                     buf_pos += n_bytes;
                     cwnd_used += n_bytes;
-                } while (cwnd_used < cwnd && n_bytes != 0 && buf_pos != MSS - 1);
+                } while (cwnd_used < floor(cwnd) && n_bytes != 0 && buf_pos != MSS - 1);
 
                 // send packet
                 p = Packet(0, 0, 0, seq_num, ack_num, buf_pos, data.c_str());
@@ -229,7 +229,7 @@ int main(int argc, char* argv[])
             }
 
             prev_ack = p.ack_num();
-            cwnd_used -= update_window(p, window, base_num, first_pkt);
+            cwnd_used -= update_window(p, window, base_num);
             ack_num = (p.seq_num() + 1) % MSN;
             cout << "Receiving ACK packet " << p.ack_num() << endl;
         }
@@ -238,6 +238,8 @@ int main(int argc, char* argv[])
         cwnd = min(cwnd, MSN / 2.0);
 
     } while (n_bytes != 0);
+
+    // TODO: keep recv until window size is not 0
 
     // send FIN
     p = Packet(0, 0, 1, seq_num, ack_num, 0, "");
@@ -295,12 +297,18 @@ bool valid_ack(const Packet &p, size_t base_num)
     }
 }
 
-size_t update_window(Packet p, unordered_map<uint16_t, Packet_info> &window, uint16_t &base_num, unordered_map<uint16_t, Packet_info>::const_iterator &first_pkt)
+size_t update_window(const Packet &p, unordered_map<uint16_t, Packet_info> &window, uint16_t &base_num)
 {
     size_t n_removed = 0;
 
-    unordered_map<uint16_t, Packet_info>::const_iterator found;
-    while (base_num < p.ack_num())
+    auto found = window.find(base_num);
+    if (found == window.end())
+    {
+        cerr << "could not find base_num packet in window" << endl;
+        exit(1);
+    }
+
+    while (base_num < p.ack_num() || ((base_num + found->second.pkt().data_len()) % MSN) == p.ack_num())
     {
         found = window.find(base_num);
         if (found == window.end())
@@ -313,8 +321,6 @@ size_t update_window(Packet p, unordered_map<uint16_t, Packet_info> &window, uin
         n_removed += len;
         base_num = (base_num + len) % MSN;
     }
-
-    first_pkt = found;
 
     return n_removed;
 }
