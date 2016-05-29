@@ -4,13 +4,12 @@
 #include <string>
 #include <bitset>
 #include <cstring>
-#include <ctime>
 #include <sys/time.h>
 
 const size_t MSS = 20; // MAX IS 1032, CAN'T BE 1024 SINCE OUR HEADER IS MORE THAN 8 BYTES
-const size_t INITIAL_SSTHRESH = 1000;
+const size_t INITIAL_SSTHRESH = 1000; // bytes
 const size_t INITIAL_TIMEOUT = 500; // ms
-const uint16_t MSN = 30720;
+const uint16_t MSN = 30720; // bytes
 
 class Packet
 {
@@ -53,6 +52,11 @@ public:
         return m_ack_num;
     }
 
+    uint16_t recv_window() const
+    {
+        return m_recv_window;
+    }
+
     uint16_t data_len() const
     {
         return m_data_len;
@@ -64,11 +68,12 @@ public:
     }
 
 private:
-    std::bitset<4>   m_flags;    // one byte
-    uint16_t         m_seq_num;  // 4 bytes
-    uint16_t         m_ack_num;  // 4 bytes
-    uint16_t         m_data_len; // 4 bytes
-    char             m_data[MSS];
+    std::bitset<4>  m_flags;    // one byte
+    uint16_t        m_seq_num;  // 4 bytes
+    uint16_t        m_ack_num;  // 4 bytes
+    uint16_t        m_data_len; // 4 bytes
+    uint16_t        m_recv_window; // 4 bytes
+    char            m_data[MSS]; // MSS bytes
 };
 
 
