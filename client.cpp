@@ -18,6 +18,7 @@ const uint16_t MAX_RECV_WINDOW = 30720;
 void process_error(int status, const string &function);
 int set_up_socket(char* argv[]);
 bool valid_pkt(const Packet &p, uint16_t base_num);
+struct timeval time_left(const Packet_info &last_ack);
 
 int main(int argc, char* argv[])
 {
@@ -30,15 +31,17 @@ int main(int argc, char* argv[])
     int sockfd = set_up_socket(argv);
     int status, n_bytes;
     Packet p;
+    Packet_info last_ack;
+    struct timeval time_left_tv;
 
     // select random seq_num
     srand(time(NULL));
     uint16_t seq_num = rand() % MSN;
     uint16_t base_num;
 
-
     // send SYN segment
     p = Packet(1, 0, 0, seq_num, 0, 0, MAX_RECV_WINDOW, "");
+    last_ack = Packet_info(p);
     status = send(sockfd, (void *) &p, sizeof(p), 0);
     process_error(status, "sending SYN");
     seq_num = (seq_num + 1) % MSN; // SYN packet takes up 1 sequence
@@ -47,14 +50,20 @@ int main(int argc, char* argv[])
     // recv SYN ACK
     do
     {
+        time_left_tv = time_left(last_ack);
+        status = setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&time_left_tv, sizeof(time_left_tv));
+        process_error(status, "setsockopt");
         n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
         process_error(n_bytes, "recv SYN ACK");
+
+        // TODO: Process recv
     } while (!p.syn_set() || !p.ack_set());
     cout << "Debug: Receiving syn ack packet with seq " << p.seq_num() << endl;
     base_num = (p.seq_num() + 1) % MSN;
 
     // send ACK after SYN ACK
     p = Packet(0, 1, 0, seq_num, base_num, 0, MAX_RECV_WINDOW, "");
+    last_ack = Packet_info(p);
     status = send(sockfd, (void *) &p, sizeof(p), 0);
     process_error(status, "sending ACK after SYN ACK");
     cout << "Sending ACK packet " << p.ack_num() << endl;
@@ -68,8 +77,13 @@ int main(int argc, char* argv[])
         // discard invalid acks
         do
         {
+            time_left_tv = time_left(last_ack);
+            status = setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&time_left_tv, sizeof(time_left_tv));
+            process_error(status, "setsockopt");
             n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
             process_error(n_bytes, "recv file");
+
+            // TODO: process recv
         } while (!valid_pkt(p, base_num));
 
         // update window
@@ -87,6 +101,7 @@ int main(int argc, char* argv[])
             cout << "Debug: recv FIN packet with seq " << p.seq_num() << endl;
             base_num = (base_num + 1) % MSN; //consumed fin segment
             p = Packet(0, 1, 1, seq_num, base_num, 0, MAX_RECV_WINDOW, "");
+            last_ack = Packet_info(p);
             status = send(sockfd, (void *) &p, sizeof(p), 0);
             process_error(status, "sending FIN ACK");
             cout << "Sending ACK packet " << p.ack_num() << endl;
@@ -98,6 +113,7 @@ int main(int argc, char* argv[])
             cout << "Debug: recv file with size " << p.data_len() << " and " << p.data().size() << endl;
             cout << "Receiving data packet " << p.seq_num() << endl;
             p = Packet(0, 1, 0, seq_num, base_num, 0, MAX_RECV_WINDOW, "");
+            last_ack = Packet_info(p);
             status = send(sockfd, (void *) &p, sizeof(p), 0);
             process_error(status, "sending ACK for data packet");
             cout << "Sending ACK packet " << p.ack_num() << endl;
@@ -109,10 +125,29 @@ int main(int argc, char* argv[])
     // recv ACK
     do
     {
+
+        time_left_tv = time_left(last_ack);
+        status = setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&time_left_tv, sizeof(time_left_tv));
+        process_error(status, "setsockopt");
         n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
         process_error(n_bytes, "recv ACK after FIN ACK");
         cout << "Debug: Receiving ack packet after FIN ACK " << p.seq_num() << endl;
+
+        // TODO: Process recv
     } while (!valid_pkt(p, base_num)); // discard invalid acks
+}
+
+struct timeval time_left(const Packet_info &last_ack)
+{
+    struct timeval max_time = last_ack.get_max_time();
+
+    struct timeval curr_time;
+    gettimeofday(&curr_time, NULL);
+
+    struct timeval time_left;
+    timersub(&max_time, &curr_time, &time_left);
+
+    return time_left;
 }
 
 bool valid_pkt(const Packet &p, uint16_t base_num)
