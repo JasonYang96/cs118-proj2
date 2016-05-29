@@ -78,7 +78,7 @@ int main(int argc, char* argv[])
         process_error(status, "setsockopt");
         n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
         process_recv(n_bytes, "recv ACK after SYN ACK", sockfd, pkt_info, recv_addr, addr_len);
-    } while (!valid_ack(p, base_num)); // discard invalid ack
+    } while (p.seq_num() != ack_num); // discard invalid ack
     uint16_t prev_ack = p.ack_num();
     cout << "Receiving ACK packet " << p.ack_num() << endl;
     ack_num = (p.seq_num() + 1) % MSN;
