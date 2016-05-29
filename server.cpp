@@ -125,15 +125,7 @@ int main(int argc, char* argv[])
             cerr << "could not find base_num packet in window" << endl;
             exit(1);
         }
-        struct timeval base_time = first_pkt->second.get_time_sent();
-        
-        // create timeout timeval
-        struct timeval timeout;
-        timeout.tv_usec = INITIAL_TIMEOUT * 1000; // microseconds
-
-        // find max_time for first packet
-        struct timeval max_time;
-        timeradd(&base_time, &timeout, &max_time);
+        struct timeval max_time = first_pkt->second.get_max_time();
 
         // recv ACK
         struct timeval curr_time;

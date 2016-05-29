@@ -84,7 +84,16 @@ public:
     Packet_info(Packet p)
     {
         m_p = p;
-        gettimeofday(&m_time_sent, NULL);
+
+        struct timeval curr_time;
+        gettimeofday(&curr_time, NULL);
+
+        // create timeout timeval
+        struct timeval timeout;
+        timeout.tv_usec = INITIAL_TIMEOUT * 1000; // microseconds
+
+        // find max_time for first packet
+        timeradd(&curr_time, &timeout, &m_max_time);
     }
 
     Packet pkt() const
@@ -92,14 +101,14 @@ public:
         return m_p;
     }
 
-    struct timeval get_time_sent() const
+    struct timeval get_max_time() const
     {
-        return m_time_sent;
+        return m_max_time;
     }
 
 private:
     Packet m_p;
-    struct timeval m_time_sent;
+    struct timeval m_max_time;
 
 };
 #endif
