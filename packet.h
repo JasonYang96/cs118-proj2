@@ -6,9 +6,9 @@
 #include <cstring>
 #include <sys/time.h>
 
-const size_t MSS = 20; // MAX IS 1032, CAN'T BE 1024 SINCE OUR HEADER IS MORE THAN 8 BYTES
-const size_t INITIAL_SSTHRESH = 50; // bytes
-const size_t INITIAL_TIMEOUT = 500; // ms
+const uint16_t MSS = 20; // MAX IS 1032, CAN'T BE 1024 SINCE OUR HEADER IS MORE THAN 8 BYTES
+const uint16_t INITIAL_SSTHRESH = 50; // bytes
+const uint16_t INITIAL_TIMEOUT = 500; // ms
 const uint16_t MSN = 30720; // bytes
 
 class Packet

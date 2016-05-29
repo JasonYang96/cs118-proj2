@@ -19,8 +19,8 @@ using namespace std;
 void process_error(int status, const string &function);
 int open_file(char* file);
 int set_up_socket(char* port);
-size_t update_window(const Packet &p, unordered_map<uint16_t, Packet_info> &window, uint16_t &base_num);
-bool valid_ack(const Packet &p, size_t base_num);
+uint16_t update_window(const Packet &p, unordered_map<uint16_t, Packet_info> &window, uint16_t &base_num);
+bool valid_ack(const Packet &p, uint16_t base_num);
 
 int main(int argc, char* argv[])
 {
@@ -70,7 +70,7 @@ int main(int argc, char* argv[])
     ack_num = (p.seq_num() + 1) % MSN;
 
     unordered_map<uint16_t, Packet_info> window;
-    double cwnd = min(MSS - 1, MSN / (size_t) 2);
+    double cwnd = min(MSS - 1, MSN / 2);
     uint16_t cwnd_used = 0;
     uint16_t ssthresh = INITIAL_SSTHRESH;
     uint16_t cwd_pkts = 0;
@@ -100,7 +100,7 @@ int main(int argc, char* argv[])
                 // make sure recv all that we can
                 do
                 {
-                    size_t n_to_send = min((size_t)(cwnd - cwnd_used), MSS - 1);
+                    size_t n_to_send = (size_t) min(cwnd - cwnd_used, MSS - 1.0);
                     n_bytes = read(file_fd, &data[buf_pos], n_to_send);
                     buf_pos += n_bytes;
                     cwnd_used += n_bytes;
@@ -265,7 +265,7 @@ int main(int argc, char* argv[])
     seq_num = (seq_num + 1) % MSN;
 }
 
-bool valid_ack(const Packet &p, size_t base_num)
+bool valid_ack(const Packet &p, uint16_t base_num)
 {
     uint16_t ack = p.ack_num();
     uint16_t max = (base_num + MSN/2) % MSN;
@@ -297,9 +297,9 @@ bool valid_ack(const Packet &p, size_t base_num)
     }
 }
 
-size_t update_window(const Packet &p, unordered_map<uint16_t, Packet_info> &window, uint16_t &base_num)
+uint16_t update_window(const Packet &p, unordered_map<uint16_t, Packet_info> &window, uint16_t &base_num)
 {
-    size_t n_removed = 0;
+    uint16_t n_removed = 0;
 
     auto found = window.find(base_num);
     if (found == window.end())
