@@ -112,7 +112,7 @@ int main(int argc, char* argv[])
         {
             cout << "Debug: recv file with size " << p.data_len() << " and " << p.data().size() << endl;
             cout << "Receiving data packet " << p.seq_num() << endl;
-            p = Packet(0, 1, 0, seq_num, base_num, 0, MAX_RECV_WINDOW, "");
+            p = Packet(0, 1, 0, seq_num, base_num, 0, MAX_RECV_WINDOW - sizeof(window), "");
             last_ack = Packet_info(p);
             status = send(sockfd, (void *) &p, sizeof(p), 0);
             process_error(status, "sending ACK for data packet");
