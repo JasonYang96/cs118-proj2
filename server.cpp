@@ -348,12 +348,10 @@ bool valid_ack(const Packet &p, uint16_t base_num)
     {
         if (ack >= base_num && ack <= max)
         {
-
             return true;
         }
         else
         {
-            cout << "ack_num is " << ack << " and base_num is " << base_num << " and max is " << max << endl;
             return false;
         }
     }
@@ -361,7 +359,6 @@ bool valid_ack(const Packet &p, uint16_t base_num)
     {
         if (ack > max && ack < base_num)
         {
-            cout << "ack_num is " << ack << " and base_num is " << base_num << " and max is " << max << endl;
             return false;
         }
         else
