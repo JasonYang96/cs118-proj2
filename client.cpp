@@ -15,7 +15,7 @@ using namespace std;
 
 void process_error(int status, const string &function);
 int set_up_socket(char* argv[]);
-bool valid_pkt(const Packet &p, size_t base_num);
+bool valid_pkt(const Packet &p, uint16_t base_num);
 
 int main(int argc, char* argv[])
 {
@@ -114,7 +114,7 @@ int main(int argc, char* argv[])
     } while (!valid_pkt(p, base_num)); // discard invalid acks
 }
 
-bool valid_pkt(const Packet &p, size_t base_num)
+bool valid_pkt(const Packet &p, uint16_t base_num)
 {
     uint16_t seq = p.seq_num();
     uint16_t max = (base_num + MSN/2) % MSN;
