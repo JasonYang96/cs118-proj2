@@ -108,7 +108,7 @@ int main(int argc, char* argv[])
         }
         else // data segment so send ACK
         {
-            cout << "Debug: recv file with size " << p.data_len() << " and " << p.data().size() << endl;
+            //cout << "Debug: recv file with size " << p.data_len() << " and " << p.data().size() << endl;
             cout << "Receiving data packet " << p.seq_num() << endl;
             p = Packet(0, 1, 0, seq_num, base_num, 0, MAX_RECV_WINDOW - sizeof(window), "");
             last_ack = Packet_info(p);
@@ -128,6 +128,7 @@ int main(int argc, char* argv[])
         process_error(status, "setsockopt");
         n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
         process_recv(n_bytes, "recv ACK after FIN ACK", sockfd, last_ack);
+
     } while (p.seq_num() != base_num); // discard invalid acks
     cout << "Debug: Receiving ack packet after FIN ACK " << p.seq_num() << endl;
 

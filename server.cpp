@@ -104,8 +104,9 @@ int main(int argc, char* argv[])
             found->second.update_time();
             status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
             process_error(status, "sending retransmission");
-            cout << "Sending data packet " << seq_num << " " << cwnd << " " << ssthresh << " Retransmission" << endl;
-            cout << "Debug: sending packet of size " << sizeof(p) + 1 << " with size " << p.data_len() << " and " << p.data().size() << endl;
+            cout << "Sending data packet " << p.seq_num() << " " << cwnd << " " << ssthresh << " Retransmission" << endl;
+            //cout << "Debug: sending packet of size " << sizeof(p) + 1 << " with size " << p.data_len() << " and " << p.data().size() << endl;
+            retransmission = false;
         }
         else // transmit new segment(s), as allowed
         {
@@ -132,7 +133,7 @@ int main(int argc, char* argv[])
                 process_error(status, "sending packet");
                 window.emplace(seq_num, pkt_info);
                 seq_num = (seq_num + p.data_len()) % MSN;
-                cout << "Debug: sending packet of size " << sizeof(p) + 1 << " with size " << p.data_len() << " and " << p.data().size() << endl;
+                //cout << "Debug: sending packet of size " << sizeof(p) + 1 << " with size " << p.data_len() << " and " << p.data().size() << endl;
             }
         }
 
@@ -186,10 +187,14 @@ int main(int argc, char* argv[])
                 fast_recovery = true;
                 slow_start = false;
                 congestion_avoidance = false;
+                retransmission = true;
                 dup_ack = 0;
             }
 
             cout << "Receiving ACK packet " << p.ack_num() << endl;
+
+            if (retransmission)
+                break;
         }
         else // new ack
         {
