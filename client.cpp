@@ -143,7 +143,7 @@ void process_recv(int n_bytes, const string &function, int sockfd, Packet_info &
             Packet p = last_ack.pkt();
             int status = send(sockfd, (void *) &p, sizeof(p), 0);
             process_error(status, "sending FIN ACK");
-            cout << "Sending ACK packet " << p.ack_num() << " \"Retransmission\"" << endl;
+            cout << "Sending ACK packet " << p.ack_num() << " Retransmission" << endl;
         }
         else // else another error and process it
         {

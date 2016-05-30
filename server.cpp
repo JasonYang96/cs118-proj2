@@ -104,7 +104,7 @@ int main(int argc, char* argv[])
             found->second.update_time();
             status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
             process_error(status, "sending retransmission");
-            cout << "Sending data packet " << seq_num << " " << cwnd << " " << ssthresh << " \"Retransmission\"" << endl;
+            cout << "Sending data packet " << seq_num << " " << cwnd << " " << ssthresh << " Retransmission" << endl;
             cout << "Debug: sending packet of size " << sizeof(p) + 1 << " with size " << p.data_len() << " and " << p.data().size() << endl;
         }
         else // transmit new segment(s), as allowed
