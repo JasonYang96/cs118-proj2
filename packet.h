@@ -85,15 +85,14 @@ public:
     {
         m_p = p;
 
-        struct timeval curr_time;
-        gettimeofday(&curr_time, NULL);
+        gettimeofday(&m_time_sent, NULL);
 
         // create timeout timeval
         struct timeval timeout;
         timeout.tv_usec = INITIAL_TIMEOUT * 1000; // microseconds
 
         // find max_time for first packet
-        timeradd(&curr_time, &timeout, &m_max_time);
+        timeradd(&m_time_sent, &timeout, &m_max_time);
     }
 
     Packet pkt() const
@@ -108,20 +107,19 @@ public:
 
     void update_time()
     {
-        struct timeval curr_time;
-        gettimeofday(&curr_time, NULL);
+        gettimeofday(&m_time_sent, NULL);
 
         // create timeout timeval
         struct timeval timeout;
         timeout.tv_usec = INITIAL_TIMEOUT * 1000; // microseconds
 
         // find max_time for first packet
-        timeradd(&curr_time, &timeout, &m_max_time);
+        timeradd(&m_time_sent, &timeout, &m_max_time);
     }
 
 private:
     Packet m_p;
+    struct timeval m_time_sent;
     struct timeval m_max_time;
-
 };
 #endif
