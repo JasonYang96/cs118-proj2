@@ -67,11 +67,6 @@ public:
         return m_data;
     }
 
-    std::bitset<3> flags() const
-    {
-        return m_flags;
-    }
-
 private:
     char            m_data[MSS]; // MSS bytes
     uint16_t        m_seq_num;  // 2 bytes
