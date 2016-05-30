@@ -8,6 +8,7 @@
 #include <netdb.h> // for getaddrinfo
 #include <ctime> // for time
 #include <cstdlib> // for srand, rand
+#include <unistd.h> // for close
 #include <unordered_map>
 #include <fstream>
 
@@ -129,6 +130,8 @@ int main(int argc, char* argv[])
         process_recv(n_bytes, "recv ACK after FIN ACK", sockfd, last_ack);
     } while (p.seq_num() != base_num); // discard invalid acks
     cout << "Debug: Receiving ack packet after FIN ACK " << p.seq_num() << endl;
+
+    close(sockfd);
 }
 
 void process_recv(int n_bytes, const string &function, int sockfd, Packet_info &last_ack)

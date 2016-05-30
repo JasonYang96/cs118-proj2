@@ -299,6 +299,9 @@ int main(int argc, char* argv[])
             process_error(status, "sending packet");
         }
     } while (!p.fin_set() || !p.ack_set());
+
+    // TODO: loop server and close file_fd when SIG_INT signal comes in
+    close(file_fd);
 }
 
 void process_recv(int n_bytes, const string &function, int sockfd, Packet_info &last_ack, struct sockaddr_storage recv_addr, socklen_t addr_len)
