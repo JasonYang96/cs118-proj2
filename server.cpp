@@ -277,6 +277,7 @@ int main(int argc, char* argv[])
     do
     {
         struct timeval max_time = pkt_info.get_max_time();
+        max_time.tv_usec += INITIAL_TIMEOUT * 1000; // double RTO
         struct timeval curr_time;
         gettimeofday(&curr_time, NULL);
         struct timeval time_left;
