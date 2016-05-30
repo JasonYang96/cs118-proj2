@@ -18,7 +18,7 @@ const uint16_t MAX_RECV_WINDOW = 30720;
 void process_error(int status, const string &function);
 void process_recv(int n_bytes, const string &function, int sockfd, Packet_info &last_ack);
 int set_up_socket(char* argv[]);
-bool valid_pkt(const Packet &p, uint16_t base_num);
+bool valid_pkt(const Packet &p, uint16_t base_num, const unordered_map<uint16_t, Packet_info> &window);
 struct timeval time_left(const Packet_info &last_ack);
 
 int main(int argc, char* argv[])
@@ -81,7 +81,7 @@ int main(int argc, char* argv[])
             process_error(status, "setsockopt");
             n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
             process_recv(n_bytes, "recv file", sockfd, last_ack);
-        } while (!valid_pkt(p, base_num));
+        } while (!valid_pkt(p, base_num, window));
 
         // update window
         window.emplace(p.seq_num(), Packet_info(p));
@@ -127,7 +127,7 @@ int main(int argc, char* argv[])
         process_error(status, "setsockopt");
         n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
         process_recv(n_bytes, "recv ACK after FIN ACK", sockfd, last_ack);
-    } while (!valid_pkt(p, base_num)); // discard invalid acks
+    } while (p.seq_num() != base_num); // discard invalid acks
     cout << "Debug: Receiving ack packet after FIN ACK " << p.seq_num() << endl;
 }
 
@@ -165,14 +165,14 @@ struct timeval time_left(const Packet_info &last_ack)
     return time_left;
 }
 
-bool valid_pkt(const Packet &p, uint16_t base_num)
+bool valid_pkt(const Packet &p, uint16_t base_num, const unordered_map<uint16_t, Packet_info> &window)
 {
     uint16_t seq = p.seq_num();
     uint16_t max = (base_num + MSN/2) % MSN;
 
     if (base_num < max) // no overflow of window
     {
-        if (seq >= base_num && seq <= max)
+        if (seq >= base_num && seq <= max && window.find(seq) == window.end())
         {
             return true;
         }
@@ -183,7 +183,7 @@ bool valid_pkt(const Packet &p, uint16_t base_num)
     }
     else // window overflowed
     {
-        if (seq > max && seq < base_num)
+        if (seq > max && seq < base_num && window.find(seq) == window.end())
         {
             return false;
         }
