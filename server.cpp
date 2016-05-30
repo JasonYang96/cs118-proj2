@@ -180,7 +180,7 @@ int main(int argc, char* argv[])
             }
 
             // if retransmit
-            if (dup_ack == 4)
+            if (dup_ack == 3)
             {
                 ssthresh = cwnd / 2;
                 cwnd = ssthresh + 3 * (MSS - 1);
