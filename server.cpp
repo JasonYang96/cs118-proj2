@@ -133,7 +133,7 @@ int main(int argc, char* argv[])
                 process_error(status, "sending packet");
                 window.emplace(seq_num, pkt_info);
                 seq_num = (seq_num + pkt_info.data_len()) % MSN;
-                cout << "Debug: sending packet of size " << buf_pos + HEADER_LEN << " with size " << pkt_info.data_len() <<  " and sizeof(p) is " << sizeof(p) << endl;
+                //cout << "Debug: sending packet of size " << buf_pos + HEADER_LEN << " with size " << pkt_info.data_len() <<  " and sizeof(p) is " << sizeof(p) << endl;
             }
         }
 
