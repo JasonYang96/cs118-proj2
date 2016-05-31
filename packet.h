@@ -83,7 +83,8 @@ public:
     Packet_info(Packet p, const struct timeval &timeout)
     {
         m_p = p;
-        update_time(timeout);
+        m_retransmission = false;
+        update_timeval(timeout);
     }
 
     Packet pkt() const
@@ -101,7 +102,7 @@ public:
         return m_max_time;
     }
 
-    void update_time(const struct timeval &timeout)
+    void update_timeval(const struct timeval &timeout)
     {
         gettimeofday(&m_time_sent, NULL);
 
@@ -109,10 +110,17 @@ public:
         timeradd(&m_time_sent, &timeout, &m_max_time);
     }
 
+    void update_time(const struct timeval &timeout)
+    {
+        update_timeval(timeout);
+        m_retransmission = true;
+    }
+
 private:
     Packet m_p;
     struct timeval m_time_sent;
     struct timeval m_max_time;
+    bool           m_retransmission;
 };
 
 class RTO
