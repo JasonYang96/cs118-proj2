@@ -381,14 +381,20 @@ uint16_t update_window(const Packet &p, unordered_map<uint16_t, Packet_info> &wi
 {
     uint16_t n_removed = 0;
 
-    auto found = window.find(base_num);
-    if (found == window.end())
+    while (base_num > p.ack_num())
     {
-        cerr << "could not find base_num packet with base_num " << base_num << " in window, update_window" << endl;
-        exit(1);
+        found = window.find(base_num);
+        if (found == window.end())
+        {
+            cerr << "could not find base_num packet with base_num " << base_num << " in window, update_window" << endl;
+            exit(1);
+        }
+        uint16_t len = found->second.pkt().data_len();
+        window.erase(base_num);
+        n_removed += len;
+        base_num = (base_num + len) % MSN;
     }
-
-    while (base_num < p.ack_num() || ((base_num + found->second.pkt().data_len()) % MSN) == p.ack_num())
+    while (base_num < p.ack_num())
     {
         found = window.find(base_num);
         if (found == window.end())
