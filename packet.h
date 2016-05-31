@@ -102,6 +102,11 @@ public:
         return m_max_time;
     }
 
+    bool retrnsmission() const
+    {
+        return m_retransmission;
+    }
+
     void update_timeval(const struct timeval &timeout)
     {
         gettimeofday(&m_time_sent, NULL);
