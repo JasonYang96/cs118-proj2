@@ -17,9 +17,9 @@ public:
     Packet() = default;
     Packet(bool syn, bool ack, bool fin, uint16_t seq_num, uint16_t ack_num, uint16_t data_len, uint16_t recv_window, const char *data)
     {
-        m_flags[2] = syn;
-        m_flags[1] = ack;
-        m_flags[0] = fin;
+        m_syn = syn;
+        m_ack = ack;
+        m_fin = fin;
         m_seq_num = seq_num;
         m_ack_num = ack_num;
         m_data_len = data_len;
@@ -29,17 +29,17 @@ public:
 
     bool syn_set() const
     {
-        return m_flags[2];
+        return m_syn;
     }
 
     bool ack_set() const
     {
-        return m_flags[1];
+        return m_ack;
     }
 
     bool fin_set() const
     {
-        return m_flags[0];
+        return m_fin;
     }
 
     uint16_t seq_num() const
@@ -68,12 +68,14 @@ public:
     }
 
 private:
-    char            m_data[MSS]; // MSS bytes
-    uint16_t        m_seq_num;  // 2 bytes
-    uint16_t        m_ack_num;  // 2 bytes
-    uint16_t        m_data_len; // 2 bytes
-    uint16_t        m_recv_window; // 2 bytes
-    std::bitset<3>  m_flags;    // one byte
+    bool     m_syn:1;
+    bool     m_ack:1;
+    bool     m_fin:1;
+    uint16_t m_seq_num;  // 2 bytes
+    uint16_t m_ack_num;  // 2 bytes
+    uint16_t m_data_len; // 2 bytes
+    uint16_t m_recv_window; // 2 bytes
+    char     m_data[MSS]; // MSS bytes
 };
 
 
