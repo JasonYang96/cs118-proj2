@@ -58,7 +58,7 @@ int main(int argc, char* argv[])
     ack_num = (p.seq_num() + 1) % MSN;
 
     // sending SYN ACK
-    p = Packet(1, 1, 0, seq_num, ack_num, 0, 0, "");
+    p = Packet(1, 1, 0, seq_num, ack_num, 0, "", 0);
     pkt_info = Packet_info(p, 0);
     status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
     process_error(status, "sending SYN ACK");
@@ -83,7 +83,7 @@ int main(int argc, char* argv[])
     cout << "Receiving ACK packet " << p.ack_num() << endl;
     ack_num = (p.seq_num() + 1) % MSN;
 
-    double cwnd = min(MSS - 1, MSN / 2);
+    double cwnd = min((double) MSS, MSN / 2.0);
     uint16_t cwnd_used = 0;
     uint16_t ssthresh = INITIAL_SSTHRESH;
     uint16_t cwd_pkts = 0;
@@ -114,26 +114,26 @@ int main(int argc, char* argv[])
             {
                 string data;
                 size_t buf_pos = 0;
-                data.resize(MSS - 1);
+                data.resize(MSS);
 
                 cout << "Sending data packet " << seq_num << " " << cwnd << " " << ssthresh << endl;
                 // make sure recv all that we can
                 do
                 {
-                    size_t n_to_send = (size_t) min(cwnd - cwnd_used, min(MSS - 1.0, (double) recv_window));
+                    size_t n_to_send = (size_t) min(cwnd - cwnd_used, (double) min(MSS, recv_window));
                     n_bytes = read(file_fd, &data[buf_pos], n_to_send);
                     buf_pos += n_bytes;
                     cwnd_used += n_bytes;
-                } while (cwnd_used < floor(cwnd) && n_bytes != 0 && buf_pos != MSS - 1);
+                } while (cwnd_used < floor(cwnd) && n_bytes != 0 && buf_pos != MSS);
 
                 // send packet
-                p = Packet(0, 0, 0, seq_num, ack_num, buf_pos, 0, data.c_str());
+                p = Packet(0, 0, 0, seq_num, ack_num, 0, data.c_str(), buf_pos);
                 pkt_info = Packet_info(p, buf_pos);
-                status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
+                status = sendto(sockfd, (void *) &p, buf_pos + HEADER_LEN, 0, (struct sockaddr *) &recv_addr, addr_len);
                 process_error(status, "sending packet");
                 window.emplace(seq_num, pkt_info);
-                seq_num = (seq_num + p.data_len()) % MSN;
-                //cout << "Debug: sending packet of size " << sizeof(p) + 1 << " with size " << p.data_len() << " and " << p.data().size() << endl;
+                seq_num = (seq_num + pkt_info.data_len()) % MSN;
+                cout << "Debug: sending packet of size " << buf_pos + HEADER_LEN << " with size " << pkt_info.data_len() <<  " and sizeof(p) is " << sizeof(p) << endl;
             }
         }
 
@@ -151,7 +151,7 @@ int main(int argc, char* argv[])
                 {
                     // adjust cwnd and ssthresh
                     ssthresh = cwnd / 2;
-                    cwnd = MSS - 1;
+                    cwnd = MSS;
                     dup_ack = 0;
                     slow_start = true;
                     congestion_avoidance = false;
@@ -172,7 +172,7 @@ int main(int argc, char* argv[])
         {
             if (fast_recovery)
             {
-                cwnd += MSS - 1;
+                cwnd += MSS;
             }
             else
             {
@@ -183,7 +183,7 @@ int main(int argc, char* argv[])
             if (dup_ack == 3)
             {
                 ssthresh = cwnd / 2;
-                cwnd = ssthresh + 3 * (MSS - 1);
+                cwnd = ssthresh + 3 * MSS;
                 fast_recovery = true;
                 slow_start = false;
                 congestion_avoidance = false;
@@ -200,7 +200,7 @@ int main(int argc, char* argv[])
         {
             if (slow_start)
             {
-                cwnd += MSS - 1;
+                cwnd += MSS;
                 dup_ack = 0;
 
                 if (cwnd >= ssthresh)
@@ -218,7 +218,7 @@ int main(int argc, char* argv[])
                     cwd_pkts = cwnd / MSS;
                     pkts_sent = 0;
                 }
-                cwnd += (MSS - 1) / (double) cwd_pkts;
+                cwnd += MSS / (double) cwd_pkts;
                 pkts_sent++;
             }
             else // fast recovery
@@ -242,7 +242,7 @@ int main(int argc, char* argv[])
     } while (n_bytes != 0 || window.size() != 0);
 
     // send FIN
-    p = Packet(0, 0, 1, seq_num, ack_num, 0, 0, "");
+    p = Packet(0, 0, 1, seq_num, ack_num, 0, "", 0);
     pkt_info = Packet_info(p, 0);
     status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
     process_error(status, "sending FIN");
@@ -267,7 +267,7 @@ int main(int argc, char* argv[])
     ack_num = (p.seq_num() + 1) % MSN;
 
     // send ACK after FIN ACK
-    p = Packet(0, 1, 0, seq_num, ack_num, 0, 0, "");
+    p = Packet(0, 1, 0, seq_num, ack_num, 0, "", 0);
     pkt_info = Packet_info(p, 0);
     status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
     process_error(status, "sending ACK after FIN ACK");
@@ -386,10 +386,10 @@ uint16_t update_window(const Packet &p, unordered_map<uint16_t, Packet_info> &wi
         auto found = window.find(base_num);
         if (found == window.end())
         {
-            cerr << "could not find base_num packet with base_num " << base_num << " in window, update_window" << endl;
+            cerr << "could not find base_num packet with base_num " << base_num << " and ack num " << p.ack_num() << " in window, update_window" << endl;
             exit(1);
         }
-        uint16_t len = found->second.pkt().data_len();
+        uint16_t len = found->second.data_len();
         window.erase(base_num);
         n_removed += len;
         base_num = (base_num + len) % MSN;
@@ -399,10 +399,10 @@ uint16_t update_window(const Packet &p, unordered_map<uint16_t, Packet_info> &wi
         auto found = window.find(base_num);
         if (found == window.end())
         {
-            cerr << "could not find base_num packet with base_num " << base_num << " in window, update_window" << endl;
+            cerr << "could not find base_num packet with base_num " << base_num << " and ack num " << p.ack_num() << " in window, update_window" << endl;
             exit(1);
         }
-        uint16_t len = found->second.pkt().data_len();
+        uint16_t len = found->second.data_len();
         window.erase(base_num);
         n_removed += len;
         base_num = (base_num + len) % MSN;

@@ -6,7 +6,7 @@
 #include <cstring>
 #include <sys/time.h>
 
-const uint16_t MSS = 1012; // MAX IS 1032 but header is 20 bytes
+const uint16_t MSS = 1024; // MAX IS 1032 but header is 8 bytes
 const uint16_t HEADER_LEN = 8; // bytes
 const uint16_t INITIAL_SSTHRESH = 30720; // bytes
 const uint16_t INITIAL_TIMEOUT = 500; // ms
@@ -16,16 +16,15 @@ class Packet
 {
 public:
     Packet() = default;
-    Packet(bool syn, bool ack, bool fin, uint16_t seq_num, uint16_t ack_num, uint16_t data_len, uint16_t recv_window, const char *data)
+    Packet(bool syn, bool ack, bool fin, uint16_t seq_num, uint16_t ack_num, uint16_t recv_window, const char *data, size_t len)
     {
         m_syn = syn;
         m_ack = ack;
         m_fin = fin;
         m_seq_num = seq_num;
         m_ack_num = ack_num;
-        m_data_len = data_len;
         m_recv_window = recv_window;
-        strcpy(m_data, data);
+        strncpy(m_data, data, len);
     }
 
     bool syn_set() const
@@ -53,19 +52,14 @@ public:
         return m_ack_num;
     }
 
-    uint16_t data_len() const
-    {
-        return m_data_len;
-    }
-
     uint16_t recv_window() const
     {
         return m_recv_window;
     }
 
-    std::string data() const
+    void data(char* buffer, size_t len) const
     {
-        return m_data;
+        strncpy(buffer, m_data, len);
     }
 
 private:
@@ -74,7 +68,6 @@ private:
     bool     m_fin:1;
     uint16_t m_seq_num;  // 2 bytes
     uint16_t m_ack_num;  // 2 bytes
-    uint16_t m_data_len; // 2 bytes
     uint16_t m_recv_window; // 2 bytes
     char     m_data[MSS]; // MSS bytes
 };
