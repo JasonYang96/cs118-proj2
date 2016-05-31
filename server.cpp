@@ -59,7 +59,7 @@ int main(int argc, char* argv[])
 
     // sending SYN ACK
     p = Packet(1, 1, 0, seq_num, ack_num, 0, 0, "");
-    pkt_info = Packet_info(p);
+    pkt_info = Packet_info(p, 0);
     status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
     process_error(status, "sending SYN ACK");
     cout << "Debug: Sending SYN ACK with seq " << seq_num << endl;
@@ -128,7 +128,7 @@ int main(int argc, char* argv[])
 
                 // send packet
                 p = Packet(0, 0, 0, seq_num, ack_num, buf_pos, 0, data.c_str());
-                pkt_info = Packet_info(p);
+                pkt_info = Packet_info(p, buf_pos);
                 status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
                 process_error(status, "sending packet");
                 window.emplace(seq_num, pkt_info);
@@ -243,7 +243,7 @@ int main(int argc, char* argv[])
 
     // send FIN
     p = Packet(0, 0, 1, seq_num, ack_num, 0, 0, "");
-    pkt_info = Packet_info(p);
+    pkt_info = Packet_info(p, 0);
     status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
     process_error(status, "sending FIN");
     cout << "Debugging: Sending FIN packet " << seq_num << endl;
@@ -268,7 +268,7 @@ int main(int argc, char* argv[])
 
     // send ACK after FIN ACK
     p = Packet(0, 1, 0, seq_num, ack_num, 0, 0, "");
-    pkt_info = Packet(p);
+    pkt_info = Packet_info(p, 0);
     status = sendto(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, addr_len);
     process_error(status, "sending ACK after FIN ACK");
     cout << "Debugging: Sending ACK after FIN ACK " << seq_num << endl;

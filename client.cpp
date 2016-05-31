@@ -43,7 +43,7 @@ int main(int argc, char* argv[])
 
     // send SYN segment
     p = Packet(1, 0, 0, seq_num, 0, 0, MAX_RECV_WINDOW, "");
-    last_ack = Packet_info(p);
+    last_ack = Packet_info(p, 0);
     status = send(sockfd, (void *) &p, sizeof(p), 0);
     process_error(status, "sending SYN");
     seq_num = (seq_num + 1) % MSN; // SYN packet takes up 1 sequence
@@ -63,7 +63,7 @@ int main(int argc, char* argv[])
 
     // send ACK after SYN ACK
     p = Packet(0, 1, 0, seq_num, base_num, 0, MAX_RECV_WINDOW, "");
-    last_ack = Packet_info(p);
+    last_ack = Packet_info(p, 0);
     status = send(sockfd, (void *) &p, sizeof(p), 0);
     process_error(status, "sending ACK after SYN ACK");
     cout << "Sending ACK packet " << p.ack_num() << endl;
@@ -85,7 +85,7 @@ int main(int argc, char* argv[])
         } while (!valid_pkt(p, base_num, window));
 
         // update window
-        window.emplace(p.seq_num(), Packet_info(p));
+        window.emplace(p.seq_num(), Packet_info(p, sizeof(p) - HEADER_LEN));
         for (auto it = window.find(base_num); it != window.end(); it = window.find(base_num))
         {
             output << it->second.pkt().data();
@@ -99,7 +99,7 @@ int main(int argc, char* argv[])
             cout << "Debug: recv FIN packet with seq " << p.seq_num() << endl;
             base_num = (base_num + 1) % MSN; //consumed fin segment
             p = Packet(0, 1, 1, seq_num, base_num, 0, MAX_RECV_WINDOW, "");
-            last_ack = Packet_info(p);
+            last_ack = Packet_info(p, 0);
             status = send(sockfd, (void *) &p, sizeof(p), 0);
             process_error(status, "sending FIN ACK");
             cout << "Sending ACK packet " << p.ack_num() << endl;
@@ -111,7 +111,7 @@ int main(int argc, char* argv[])
             //cout << "Debug: recv file with size " << p.data_len() << " and " << p.data().size() << endl;
             cout << "Receiving data packet " << p.seq_num() << endl;
             p = Packet(0, 1, 0, seq_num, base_num, 0, MAX_RECV_WINDOW - sizeof(window), "");
-            last_ack = Packet_info(p);
+            last_ack = Packet_info(p, 0);
             status = send(sockfd, (void *) &p, sizeof(p), 0);
             process_error(status, "sending ACK for data packet");
             cout << "Sending ACK packet " << p.ack_num() << endl;

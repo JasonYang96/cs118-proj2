@@ -7,6 +7,7 @@
 #include <sys/time.h>
 
 const uint16_t MSS = 1012; // MAX IS 1032 but header is 20 bytes
+const uint16_t HEADER_LEN = 8; // bytes
 const uint16_t INITIAL_SSTHRESH = 30720; // bytes
 const uint16_t INITIAL_TIMEOUT = 500; // ms
 const uint16_t MSN = 30720; // bytes
@@ -83,9 +84,10 @@ class Packet_info
 {
 public:
     Packet_info() = default;
-    Packet_info(Packet p)
+    Packet_info(Packet p, uint16_t data_len)
     {
         m_p = p;
+        m_data_len = data_len;
 
         gettimeofday(&m_time_sent, NULL);
 
@@ -100,6 +102,11 @@ public:
     Packet pkt() const
     {
         return m_p;
+    }
+
+    uint16_t data_len() const
+    {
+        return m_data_len;
     }
 
     struct timeval get_max_time() const
@@ -123,5 +130,6 @@ private:
     Packet m_p;
     struct timeval m_time_sent;
     struct timeval m_max_time;
+    uint16_t       m_data_len;
 };
 #endif
