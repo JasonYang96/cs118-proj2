@@ -25,12 +25,6 @@ bool valid_ack(const Packet &p, uint16_t base_num);
 int open_file(char* file);
 int set_up_socket(char* port);
 
-bool server_on = true;
-void interrupt_handler(int x)
-{
-    server_on = false;
-}
-
 int main(int argc, char* argv[])
 {
     if (argc != 3)
@@ -39,13 +33,21 @@ int main(int argc, char* argv[])
         exit(1);
     }
 
-    int file_fd = open_file(argv[2]);
-    int sockfd = set_up_socket(argv[1]);
+    struct sigaction act;
+    memset(&act, '\0', sizeof(act));
 
-    signal(SIGINT, interrupt_handler);
-
-    while (server_on)
+    act.sa_flags = SA_SIGINFO;
+    if (sigaction(SIGINT, &act, NULL) < 0)
     {
+        process_error(errno, "sigaction");
+        cout << "test" << endl;
+        return 1;
+    }
+
+    while (1)
+    {
+        int file_fd = open_file(argv[2]);
+        int sockfd = set_up_socket(argv[1]);
         struct sockaddr_storage recv_addr;
         socklen_t addr_len = sizeof(recv_addr);
         int status, n_bytes;
@@ -317,9 +319,6 @@ int main(int argc, char* argv[])
             }
         } while (!p.fin_set() || !p.ack_set());
     }
-
-    close(sockfd);
-    close(file_fd);
 }
 
 void process_recv(int n_bytes, const string &function, int sockfd, Packet_info &last_ack, struct sockaddr_storage recv_addr, socklen_t addr_len)
