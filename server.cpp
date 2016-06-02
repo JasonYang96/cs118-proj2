@@ -118,12 +118,12 @@ int main(int argc, char* argv[])
                 status = sendto(sockfd, (void *) &p, found->second.data_len() + HEADER_LEN, 0, (struct sockaddr *) &recv_addr, addr_len);
                 process_error(status, "sending retransmission");
                 cout << "Sending data packet " << p.seq_num() << " " << cwnd << " " << ssthresh << " Retransmission" << endl;
-                //cout << "Debug: sending packet of size " << sizeof(p) + 1 << " with size " << p.data_len() << " and " << p.data().size() << endl;
+                cout << "Debug: sending packet of size " << sizeof(p) << " with size " << found->second.data_len() << endl;
                 retransmission = false;
             }
             else // transmit new segment(s), as allowed
             {
-                while (floor(cwnd) - cwnd_used >= 19 && n_bytes != 0)
+                while (floor(cwnd) - cwnd_used >= MSS && n_bytes != 0)
                 {
                     string data;
                     size_t buf_pos = 0;
@@ -140,13 +140,14 @@ int main(int argc, char* argv[])
                     } while (cwnd_used < floor(cwnd) && n_bytes != 0 && buf_pos != MSS);
 
                     // send packet
+                    //cout << "buf_pos is " << buf_pos << endl;
                     p = Packet(0, 0, 0, seq_num, ack_num, 0, data.c_str(), buf_pos);
                     pkt_info = Packet_info(p, buf_pos);
                     status = sendto(sockfd, (void *) &p, buf_pos + HEADER_LEN, 0, (struct sockaddr *) &recv_addr, addr_len);
                     process_error(status, "sending packet");
                     window.emplace(seq_num, pkt_info);
                     seq_num = (seq_num + pkt_info.data_len()) % MSN;
-                    //cout << "Debug: sending packet of size " << buf_pos + HEADER_LEN << " with size " << pkt_info.data_len() <<  " and sizeof(p) is " << sizeof(p) << endl;
+                    cout << "Debug: sending packet of size " << buf_pos + HEADER_LEN << " with size " << pkt_info.data_len() <<  " and sizeof(p) is " << sizeof(p) << endl;
                 }
             }
 
@@ -207,7 +208,7 @@ int main(int argc, char* argv[])
                 cout << "Receiving ACK packet " << p.ack_num() << endl;
 
                 if (retransmission)
-                    break;
+                    continue;
             }
             else // new ack
             {
@@ -345,7 +346,7 @@ struct timeval time_left(unordered_map<uint16_t, Packet_info> &window, uint16_t 
     auto first_pkt = window.find(base_num);
     if (first_pkt == window.end())
     {
-        cerr << "could not find base_num packet in window, in time_left function" << endl;
+        cerr << "could not find base_num packet " << base_num << " in window, in time_left function" << endl;
         exit(1);
     }
     struct timeval max_time = first_pkt->second.get_max_time();

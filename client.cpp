@@ -82,17 +82,20 @@ int main(int argc, char* argv[])
             process_error(status, "setsockopt");
             n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
             process_recv(n_bytes, "recv file", sockfd, last_ack);
+            if (n_bytes == -1) // if timeout, continue receiving
+                continue;
         } while (!valid_pkt(p, base_num, window));
 
         // update window
-        last_ack = Packet_info(p, n_bytes - HEADER_LEN);
-        window.emplace(p.seq_num(), last_ack);
+        Packet_info new_pkt(p, n_bytes - HEADER_LEN);
+        window.emplace(p.seq_num(), new_pkt);
         for (auto it = window.find(base_num); it != window.end(); it = window.find(base_num))
         {
             size_t len = it->second.data_len();
-            char buffer[len];
+            char buffer[len+1];
+            buffer[len] = '\0';
             it->second.pkt().data(buffer, len);
-            output << buffer;
+            output.write(buffer, len);
             base_num = (base_num + len) % MSN;
             window.erase(it);
         }
@@ -103,9 +106,9 @@ int main(int argc, char* argv[])
             cout << "Debug: recv FIN packet with seq " << p.seq_num() << endl;
             base_num = (p.seq_num() + 1) % MSN; //consumed fin segment
             p = Packet(0, 1, 1, seq_num, base_num, MAX_RECV_WINDOW, "", 0);
-            last_ack = Packet_info(p, 0);
             status = send(sockfd, (void *) &p, HEADER_LEN, 0);
             process_error(status, "sending FIN ACK");
+            last_ack = Packet_info(p, 0);
             cout << "Sending ACK packet " << p.ack_num() << endl;
             seq_num = (seq_num + 1) % MSN;
             break;
@@ -117,8 +120,8 @@ int main(int argc, char* argv[])
             p = Packet(0, 1, 0, seq_num, base_num, MAX_RECV_WINDOW - sizeof(window), "", 0);
             status = send(sockfd, (void *) &p, HEADER_LEN, 0);
             process_error(status, "sending ACK for data packet");
+            last_ack = Packet_info(p, 0);
             cout << "Sending ACK packet " << p.ack_num() << endl;
-            seq_num = (seq_num + 1) % MSN;
         }
     }
     output.close();
