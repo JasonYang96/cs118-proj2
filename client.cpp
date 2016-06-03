@@ -103,7 +103,7 @@ int main(int argc, char* argv[])
         // send FIN ACK if FIN segment
         if (p.fin_set())
         {
-            cout << "Debug: recv FIN packet with seq " << p.seq_num() << endl;
+            //cout << "Debug: recv FIN packet with seq " << p.seq_num() << endl;
             base_num = (p.seq_num() + 1) % MSN; //consumed fin segment
             p = Packet(0, 1, 1, seq_num, base_num, MAX_RECV_WINDOW, "", 0);
             status = send(sockfd, (void *) &p, HEADER_LEN, 0);
@@ -115,7 +115,7 @@ int main(int argc, char* argv[])
         }
         else // data segment so send ACK
         {
-            cout << "Debug: recv file with size " << last_ack.data_len() << endl;
+            //cout << "Debug: recv file with size " << last_ack.data_len() << endl;
             cout << "Receiving data packet " << p.seq_num() << endl;
             p = Packet(0, 1, 0, seq_num, base_num, MAX_RECV_WINDOW - sizeof(window), "", 0);
             status = send(sockfd, (void *) &p, HEADER_LEN, 0);
