@@ -33,23 +33,8 @@ int main(int argc, char* argv[])
         exit(1);
     }
 
-    int sockfd = -1;
-    int file_fd = -1;
-
-    struct sigaction act;
-    memset(&act, '\0', sizeof(act));
-
-    act.sa_flags = SA_SIGINFO;
-    if (sigaction(SIGINT, &act, NULL) < 0)
-    {
-        process_error(errno, "sigaction");
-        close(file_fd);
-        close(sockfd);
-        return 1;
-    }
-
-    file_fd = open_file(argv[2]);
-    sockfd = set_up_socket(argv[1]);
+    int file_fd = open_file(argv[2]);
+    int sockfd = set_up_socket(argv[1]);
     struct sockaddr_storage recv_addr;
     socklen_t addr_len = sizeof(recv_addr);
     int status, n_bytes;
