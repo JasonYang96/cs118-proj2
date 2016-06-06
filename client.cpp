@@ -9,8 +9,8 @@
 #include <ctime> // for time
 #include <cstdlib> // for srand, rand
 #include <unistd.h> // for close
-#include <unordered_map>
-#include <fstream>
+#include <unordered_map> // for map
+#include <fstream> // for ofstream
 
 using namespace std;
 
@@ -89,6 +89,7 @@ int main(int argc, char* argv[])
         // update window
         Packet_info new_pkt(p, n_bytes - HEADER_LEN);
         window.emplace(p.seq_num(), new_pkt);
+        //cout << "after emplace, window_size is now " << window.size() << endl;
         for (auto it = window.find(base_num); it != window.end(); it = window.find(base_num))
         {
             size_t len = it->second.data_len();
@@ -98,6 +99,7 @@ int main(int argc, char* argv[])
             output.write(buffer, len);
             base_num = (base_num + len) % MSN;
             window.erase(it);
+            //cout << "after erase, window_size is now " << window.size() << endl;
         }
 
         // send FIN ACK if FIN segment

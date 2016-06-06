@@ -13,6 +13,7 @@
 #include <sys/time.h> // for socket timeout
 #include <cmath> // for floor
 #include <signal.h> // for SIG_INT detection
+#include <fstream> // for ifstream
 #include <errno.h>
 
 using namespace std;
@@ -33,7 +34,7 @@ int main(int argc, char* argv[])
         exit(1);
     }
 
-    int file_fd = open_file(argv[2]);
+    ifstream file(argv[2]);
     int sockfd = set_up_socket(argv[1]);
     struct sockaddr_storage recv_addr;
     socklen_t addr_len = sizeof(recv_addr);
@@ -110,7 +111,7 @@ int main(int argc, char* argv[])
         }
         else // transmit new segment(s), as allowed
         {
-            while (floor(cwnd) - cwnd_used >= MSS && n_bytes != 0)
+            while (floor(cwnd) - cwnd_used >= MSS && !file.eof())
             {
                 string data;
                 size_t buf_pos = 0;
@@ -121,13 +122,14 @@ int main(int argc, char* argv[])
                 do
                 {
                     size_t n_to_send = (size_t) min(cwnd - cwnd_used, (double) min(MSS, recv_window));
-                    n_bytes = read(file_fd, &data[buf_pos], n_to_send);
+                    file.read(&data[buf_pos], n_to_send);
+                    n_bytes = file.gcount();
                     buf_pos += n_bytes;
                     cwnd_used += n_bytes;
-                } while (cwnd_used < floor(cwnd) && n_bytes != 0 && buf_pos != MSS);
+                } while (cwnd_used < floor(cwnd) && !file.eof() && buf_pos != MSS);
 
                 // send packet
-                //cout << "buf_pos is " << buf_pos << endl;
+                //cout << "base_num is " << base_num << endl;
                 p = Packet(0, 0, 0, seq_num, ack_num, 0, data.c_str(), buf_pos);
                 pkt_info = Packet_info(p, buf_pos);
                 status = sendto(sockfd, (void *) &p, buf_pos + HEADER_LEN, 0, (struct sockaddr *) &recv_addr, addr_len);
@@ -169,6 +171,7 @@ int main(int argc, char* argv[])
         if (retransmission)
             continue;
 
+        cout << "Receiving ACK packet " << p.ack_num() << endl;
         if (prev_ack == p.ack_num()) // if duplicate
         {
             if (fast_recovery)
@@ -191,11 +194,6 @@ int main(int argc, char* argv[])
                 retransmission = true;
                 dup_ack = 0;
             }
-
-            cout << "Receiving ACK packet " << p.ack_num() << endl;
-
-            if (retransmission)
-                continue;
         }
         else // new ack
         {
@@ -233,14 +231,13 @@ int main(int argc, char* argv[])
             prev_ack = p.ack_num();
             cwnd_used -= update_window(p, window, base_num);
             ack_num = (p.seq_num() + 1) % MSN;
-            cout << "Receiving ACK packet " << p.ack_num() << endl;
         }
 
         // make sure cwnd is not greater than MSN/2
         cwnd = min(cwnd, MSN / 2.0);
 
         recv_window = p.recv_window();
-    } while (n_bytes != 0 || window.size() != 0);
+    } while (!file.eof() || (window.size() != 0));
 
     // send FIN
     p = Packet(0, 0, 1, seq_num, ack_num, 0, "", 0);
@@ -407,38 +404,6 @@ uint16_t update_window(const Packet &p, unordered_map<uint16_t, Packet_info> &wi
     }
 
     return n_removed;
-}
-
-int open_file(char* file)
-{
-    // tries to open file served
-    int file_fd = open(file, O_RDONLY);
-    if (file_fd < 0)
-    {
-        cerr << "Could not open " << file << endl;
-        exit(1);
-    }
-
-    // makes sure it's a regular file
-    struct stat buf;
-    int status = fstat(file_fd, &buf);
-    if (status == -1)
-    {
-        perror("fstat");
-        close(file_fd);
-        exit(1);
-    }
-
-    if (!S_ISREG(buf.st_mode))
-    {
-        cerr << file << " is not a regular file" << endl;
-        exit(1);
-    }
-
-    // TODO: FOR DEBUGGING PURPOSES ONLY, GET RID WHEN DONE
-    cout << "Debugging: file is " << buf.st_size << " bytes" << endl;
-
-    return file_fd;
 }
 
 int set_up_socket(char* port)
