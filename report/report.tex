@@ -1,0 +1,94 @@
+\documentclass{article}
+
+\usepackage[margin={1in,1in}]{geometry}
+\usepackage{float}
+\usepackage{amsmath}
+\usepackage{listings, color}
+
+\lstdefinestyle{cstyle} {
+	language=C++,
+    basicstyle=\ttfamily,
+    keywordstyle=\color{blue}\ttfamily,
+    stringstyle=\color{red}\ttfamily,
+    commentstyle=\color{green}\ttfamily,
+    morecomment=[l][\color{magenta}]{\#}
+}
+
+\lstset{aboveskip=\baselineskip,belowskip=\baselineskip,basicstyle=\ttfamily}
+
+\begin{document}
+
+\title{CS 118 - Project 2}
+\author{Alex Crosthwaite -- Jacob Nisnevich -- Jason Yang}
+
+\maketitle
+
+\section{Design}
+
+As a group, we implemented two classes to create our TCP packet abstraction, \texttt{Packet} and \texttt{Packet\_info}. We also made the decision to \textit{not} implement classes for the client and server for this project. Rather, we decided to simply execute the client and server code line-by-line in \texttt{client.cpp} and \texttt{server.cpp} respectively.
+
+\subsection{Packet}
+
+In our project, we used the \texttt{Packet} class for as our TCP packet abstraction. The class contained \texttt{SYN}, \texttt{ACK}, and \texttt{FIN} flags, in addtion to member variables for the sequence number, acknowledgment number, recieve window, and the data contained in the packet. The class could either be initialized with each of these values or with default values.
+
+\subsection{Packet\_info}
+
+We also implemented a \texttt{Packet\_info} class that we used to keep track of data length, the time the packet was sent, and the timeout time for the packet.
+
+\subsection{Client}
+
+\subsection{Server}
+
+\section{Problems and Solutions}
+
+\subsection{Binary File Transfer Issues}
+
+\subsection{Bit Vector Issues}
+
+\subsection{Congestion Control Issues}
+
+\subsection{Debugging Issues}
+
+\subsection{Extra Bits at the End of Packets}
+
+\section{Extra Credit}
+
+For the extra credit portion of the project, our group chose to implement TCP Reno fast retransmission and fast recovery as well as adaptive RTO.
+
+\section{Build Instructions}
+
+For Project 2 we did not modify the Makefile or Vagrantfile and just used the suggested virtual machine and g++ version. To build the project, simply initiate the two Ubuntu-based virtual machines with:
+
+\begin{lstlisting}[language=bash]
+vagrant up
+\end{lstlisting} 
+
+\noindent
+Then, \texttt{ssh} into both the client and server machines with:
+
+\begin{lstlisting}[language=bash]
+vagrant ssh client
+vagrant ssh server
+\end{lstlisting} 
+
+\noindent
+Finally, build the project with:
+
+\begin{lstlisting}[language=bash]
+make client
+make server
+\end{lstlisting}
+
+\section{Test Cases}
+
+\subsection{}
+
+\section{Contributions}
+
+\subsection{Alex Crosthwaite}
+
+\subsection{Jacob Nisnevich}
+
+\subsection{Jason Yang}
+
+\end{document}
