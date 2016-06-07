@@ -3,5 +3,5 @@
 .vagrant
 server
 client
-file
+received.data
 *.txt

@@ -55,7 +55,7 @@ int main(int argc, char* argv[])
         n_bytes = recvfrom(sockfd, (void *) &p, sizeof(p), 0, (struct sockaddr *) &recv_addr, &addr_len);
         process_error(n_bytes, "recv SYN");
     } while (!p.syn_set());
-    cout << "Debug: Receiving syn packet with seq " << p.seq_num() << endl;
+    cout << "Receiving packet " << p.ack_num() << endl;
     ack_num = (p.seq_num() + 1) % MSN;
 
     // sending SYN ACK
@@ -63,7 +63,7 @@ int main(int argc, char* argv[])
     pkt_info = Packet_info(p, n_bytes - HEADER_LEN);
     status = sendto(sockfd, (void *) &p, HEADER_LEN, 0, (struct sockaddr *) &recv_addr, addr_len);
     process_error(status, "sending SYN ACK");
-    cout << "Debug: Sending SYN ACK with seq " << seq_num << endl;
+    cout << "Sending packet " << seq_num << " " << MSS << " " << MSS << endl;
     seq_num = (seq_num + 1) % MSN;
     base_num = seq_num;
 
@@ -81,7 +81,7 @@ int main(int argc, char* argv[])
         process_recv(n_bytes, "recv ACK after SYN ACK", sockfd, pkt_info, recv_addr, addr_len);
     } while (p.seq_num() != ack_num); // discard invalid ack
     uint16_t prev_ack = p.ack_num();
-    cout << "Receiving ACK packet " << p.ack_num() << endl;
+    cout << "Receiving packet " << p.ack_num() << endl;
     ack_num = (p.seq_num() + 1) % MSN;
 
     double cwnd = min((double) MSS, MSN / 2.0);
@@ -105,7 +105,7 @@ int main(int argc, char* argv[])
             found->second.update_time();
             status = sendto(sockfd, (void *) &p, found->second.data_len() + HEADER_LEN, 0, (struct sockaddr *) &recv_addr, addr_len);
             process_error(status, "sending retransmission");
-            cout << "Sending data packet " << p.seq_num() << " " << cwnd << " " << ssthresh << " Retransmission" << endl;
+            cout << "Sending packet " << p.seq_num() << " " << cwnd << " " << ssthresh << " Retransmission" << endl;
             //cout << "Debug: sending packet of size " << sizeof(p) << " with size " << found->second.data_len() << endl;
             retransmission = false;
         }
@@ -117,7 +117,7 @@ int main(int argc, char* argv[])
                 size_t buf_pos = 0;
                 data.resize(MSS);
 
-                cout << "Sending data packet " << seq_num << " " << cwnd << " " << ssthresh << endl;
+                cout << "Sending packet " << seq_num << " " << cwnd << " " << ssthresh << endl;
                 // make sure recv all that we can
                 do
                 {
@@ -171,7 +171,7 @@ int main(int argc, char* argv[])
         if (retransmission)
             continue;
 
-        cout << "Receiving ACK packet " << p.ack_num() << endl;
+        cout << "Receiving packet " << p.ack_num() << endl;
         if (prev_ack == p.ack_num()) // if duplicate
         {
             if (fast_recovery)
@@ -233,8 +233,9 @@ int main(int argc, char* argv[])
             ack_num = (p.seq_num() + 1) % MSN;
         }
 
-        // make sure cwnd is not greater than MSN/2
-        cwnd = min(cwnd, MSN / 2.0);
+        cwnd = min(cwnd, MSN / 2.0); // make sure cwnd is not greater than MSN/2
+        cwnd = max(cwnd, (double) MSS); // make sure cwnd is not less than MSS
+        ssthresh = max(ssthresh, MSS); // make sure ssthresh is at least MSS
 
         recv_window = p.recv_window();
     } while (!file.eof() || (window.size() != 0));
@@ -244,8 +245,9 @@ int main(int argc, char* argv[])
     pkt_info = Packet_info(p, 0);
     status = sendto(sockfd, (void *) &p, HEADER_LEN, 0, (struct sockaddr *) &recv_addr, addr_len);
     process_error(status, "sending FIN");
-    cout << "Debugging: Sending FIN packet " << seq_num << endl;
+    cout << "Sending packet " << seq_num << endl;
     seq_num = (seq_num + 1) % MSN;
+    cout << "Debug: Sending FIN" << endl;
 
     // recv FIN ACK
     do
@@ -261,15 +263,17 @@ int main(int argc, char* argv[])
         process_recv(n_bytes, "recv FIN ACK", sockfd, pkt_info, recv_addr, addr_len);
     } while (!p.fin_set() || !p.ack_set());
     prev_ack = p.ack_num();
-    cout << "Receiving ACK packet " << p.ack_num() << endl;
+    cout << "Receiving packet " << p.ack_num() << endl;
     ack_num = (p.seq_num() + 1) % MSN;
+    cout << "Debug: Recv fin ack after fin" << endl;
 
     // send ACK after FIN ACK
     p = Packet(0, 1, 0, seq_num, ack_num, 0, "", 0);
     pkt_info = Packet_info(p, 0);
     status = sendto(sockfd, (void *) &p, HEADER_LEN, 0, (struct sockaddr *) &recv_addr, addr_len);
     process_error(status, "sending ACK after FIN ACK");
-    cout << "Debugging: Sending ACK after FIN ACK " << seq_num << endl;
+    cout << "Sending packet " << seq_num << endl;
+    cout << "Debug: send ack after FIN ACK" << endl;
 
     // make sure client receives ACK after FIN ACK
     do

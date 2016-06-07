@@ -14,7 +14,7 @@
 
 using namespace std;
 
-const uint16_t MAX_RECV_WINDOW = 30720;
+const uint16_t MAX_RECV_WINDOW = 15360;
 
 void process_error(int status, const string &function);
 void process_recv(int n_bytes, const string &function, int sockfd, Packet_info &last_ack);
@@ -47,7 +47,7 @@ int main(int argc, char* argv[])
     status = send(sockfd, (void *) &p, HEADER_LEN, 0);
     process_error(status, "sending SYN");
     seq_num = (seq_num + 1) % MSN; // SYN packet takes up 1 sequence
-    cout << "Debug: Sending syn packet with seq " << p.seq_num() << endl;
+    cout << "Sending data packet " << p.seq_num() << " " << MSS << " " << MSS << "SYN" << endl;
 
     // recv SYN ACK
     do
@@ -66,12 +66,12 @@ int main(int argc, char* argv[])
     last_ack = Packet_info(p, n_bytes - HEADER_LEN);
     status = send(sockfd, (void *) &p, HEADER_LEN, 0);
     process_error(status, "sending ACK after SYN ACK");
-    cout << "Sending ACK packet " << p.ack_num() << endl;
+    cout << "Sending packet " << p.ack_num() << endl;
     seq_num = (seq_num + 1) % MSN;
 
     // receive until a FIN segment is recv'd
     unordered_map<uint16_t, Packet_info> window;
-    ofstream output("file");
+    ofstream output("received.data");
     while (1)
     {
         // discard invalid acks
@@ -111,7 +111,7 @@ int main(int argc, char* argv[])
             status = send(sockfd, (void *) &p, HEADER_LEN, 0);
             process_error(status, "sending FIN ACK");
             last_ack = Packet_info(p, 0);
-            cout << "Sending ACK packet " << p.ack_num() << endl;
+            cout << "Sending packet " << p.ack_num() << endl;
             seq_num = (seq_num + 1) % MSN;
             break;
         }
@@ -123,7 +123,7 @@ int main(int argc, char* argv[])
             status = send(sockfd, (void *) &p, HEADER_LEN, 0);
             process_error(status, "sending ACK for data packet");
             last_ack = Packet_info(p, 0);
-            cout << "Sending ACK packet " << p.ack_num() << endl;
+            cout << "Sending packet " << p.ack_num() << endl;
         }
     }
     output.close();
@@ -137,7 +137,7 @@ int main(int argc, char* argv[])
         n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
         process_recv(n_bytes, "recv ACK after FIN ACK", sockfd, last_ack);
     } while (p.seq_num() != base_num); // discard invalid acks
-    cout << "Debug: Receiving ack packet after FIN ACK " << p.seq_num() << endl;
+    cout << "Receiving packet " << p.seq_num() << endl;
 
     close(sockfd);
 }
@@ -154,7 +154,7 @@ void process_recv(int n_bytes, const string &function, int sockfd, Packet_info &
             Packet p = last_ack.pkt();
             int status = send(sockfd, (void *) &p, sizeof(p), 0);
             process_error(status, "sending FIN ACK");
-            cout << "Sending ACK packet " << p.ack_num() << " Retransmission" << endl;
+            cout << "Sending packet " << p.ack_num() << " Retransmission" << endl;
         }
         else // else another error and process it
         {

@@ -17,7 +17,7 @@ client: $(CLIENTCLASSES)
 	$(CXX) -o $@ $^ $(CXXFLAGS)
 
 clean:
-	rm -rf *.o *~ *.gch *.swp *.dSYM server client file *.tar.gz
+	rm -rf *.o *~ *.gch *.swp *.dSYM server client received.data *.tar.gz
 
 tarball: clean
 	tar -cvf $(USERID).tar.gz *
