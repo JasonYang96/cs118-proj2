@@ -37,6 +37,18 @@ We also implemented a \texttt{Packet\_info} class that we used to keep track of 
 
 \subsection{Client}
 
+Overall, our implementation of the client was very much by-the-book and straightforward. As such, this will be a general run-through of our implementation of the client. \\
+
+\noindent
+The first step in our client execution is to set-up the UDP socket. To do this, we created a helper function, \texttt{set\_up\_socket}, that takes in the command-line arguments and returns the socket file descriptor. This helper function sets up an \texttt{addrinfo} struct and finds and connects to an available socket. \\
+
+\noindent
+The client then selects a random initial sequence number, initializes a \texttt{Packet} with this sequence number and a \texttt{SYN} flag, and sends it along the UDP socket that was previously set up and increments the sequence number. The client then sits in a loop until a \texttt{Packet} with \texttt{SYN} and \texttt{ACK} flags arrives, and then increments the sequence number. Then, the client sends a \texttt{Packet} with an \texttt{ACK} flag and again increments the sequence number. \\
+
+\noindent
+Now that the connection has been established, the client initializes a window, which is implemented as an \texttt{unordered\_map} of \texttt{uint16\_t} to \texttt{Packet\_info}, and enters a loop that continues until a \texttt{Packet} with a \texttt{FIN} flag has been received. Within the loop, the client discards all invalid \texttt{ACK} packets, updates the window with new packets, and either sends an acknowledgement if a data packet was recieved or a \texttt{FIN/ACK} if a \texttt{FIN} packet was received. The received data is written to the ``received.data'' file and the socket is closed when the client recieves the final \texttt{ACK} packet.
+
+
 \subsection{Server}
 
 \section{Problems and Solutions}
@@ -81,7 +93,40 @@ make server
 
 \section{Test Cases}
 
-\subsection{}
+\subsection{No Loss}
+
+For the no packet loss testing, we tried sending four different files:
+
+\begin{itemize}
+	\item \texttt{small.txt}
+	\item \texttt{server.cpp} (medium-size)
+	\item \texttt{large.txt}
+	\item \texttt{client} (binary)
+\end{itemize}
+
+\subsection{10\% Loss on Client/Server}
+
+We also tested the TCP connection with 10\% loss on both the client and the server. We tested this using the given command to emulate a network with 10\% loss as follows:
+
+\begin{lstlisting}[language=bash]
+tc qdisc add dev eth1 root netem loss 10%
+\end{lstlisting}
+
+\noindent
+Using this emulated network, we sent the same files as with the no packet loss testing.
+
+\subsection{20\% Loss on Client/Server}
+
+In addition to testing with no loss and 10\% loss, we tested with an emulated network with 20\% loss. This was done with the following command:
+
+\begin{lstlisting}[language=bash]
+tc qdisc add dev eth1 root netem loss 20%
+\end{lstlisting}
+
+\noindent
+Again, we sent the same four files as with the previous two testing scenarios.
+
+\subsection{Packet Re-ordering}
 
 \section{Contributions}
 
