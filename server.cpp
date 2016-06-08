@@ -108,20 +108,14 @@ int main(int argc, char* argv[])
             status = sendto(sockfd, (void *) &p, found->second.data_len() + HEADER_LEN, 0, (struct sockaddr *) &recv_addr, addr_len);
             process_error(status, "sending retransmission");
             cout << "Sending packet " << p.seq_num() << " " << cwnd << " " << ssthresh << " Retransmission" << endl;
-            //cout << "Debug: sending packet of size " << sizeof(p) << " with size " << found->second.data_len() << endl;
             retransmission = false;
 
             if (last_retransmit)
             {
-                struct timeval single = rto.get_timeout();
-                single.tv_sec *= 2;
-                single.tv_usec *= 2;
-                found->second.update_time(single);
+                // double RTO if retransmission again
+                rto.double_RTO();
             }
-            else
-            {
-                found->second.update_time(rto.get_timeout());
-            }
+            found->second.update_time(rto.get_timeout());
             last_retransmit = true;
         }
         else // transmit new segment(s), as allowed
@@ -145,14 +139,12 @@ int main(int argc, char* argv[])
                 } while (cwnd_used < floor(cwnd) && !file.eof() && buf_pos != MSS);
 
                 // send packet
-                //cout << "base_num is " << base_num << endl;
                 p = Packet(0, 0, 0, seq_num, ack_num, 0, data.c_str(), buf_pos);
                 pkt_info = Packet_info(p, buf_pos, rto.get_timeout());
                 status = sendto(sockfd, (void *) &p, buf_pos + HEADER_LEN, 0, (struct sockaddr *) &recv_addr, addr_len);
                 process_error(status, "sending packet");
                 window.emplace(seq_num, pkt_info);
                 seq_num = (seq_num + pkt_info.data_len()) % MSN;
-                //cout << "Debug: sending packet of size " << buf_pos + HEADER_LEN << " with size " << pkt_info.data_len() <<  " and sizeof(p) is " << sizeof(p) << endl;
             }
         }
 
@@ -263,7 +255,6 @@ int main(int argc, char* argv[])
     process_error(status, "sending FIN");
     cout << "Sending packet " << seq_num << " FIN" << endl;
     seq_num = (seq_num + 1) % MSN;
-    cout << "Debug: Sending FIN" << endl;
 
     // recv FIN ACK
     do
@@ -281,7 +272,6 @@ int main(int argc, char* argv[])
     prev_ack = p.ack_num();
     cout << "Receiving packet " << p.ack_num() << endl;
     ack_num = (p.seq_num() + 1) % MSN;
-    cout << "Debug: Recv fin ack after fin" << endl;
 
     // send ACK after FIN ACK
     p = Packet(0, 1, 0, seq_num, ack_num, 0, "", 0);
@@ -289,7 +279,6 @@ int main(int argc, char* argv[])
     status = sendto(sockfd, (void *) &p, HEADER_LEN, 0, (struct sockaddr *) &recv_addr, addr_len);
     process_error(status, "sending ACK after FIN ACK");
     cout << "Sending packet " << seq_num << endl;
-    cout << "Debug: send ack after FIN ACK" << endl;
 
     // make sure client receives ACK after FIN ACK
     do

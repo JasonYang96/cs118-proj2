@@ -49,7 +49,7 @@ int main(int argc, char* argv[])
     status = send(sockfd, (void *) &p, HEADER_LEN, 0);
     process_error(status, "sending SYN");
     seq_num = (seq_num + 1) % MSN; // SYN packet takes up 1 sequence
-    cout << "Sending packet " << p.seq_num() << " SYN" << endl;
+    cout << "Sending packet " << p.ack_num() << " SYN" << endl;
 
     // recv SYN ACK
     do
@@ -60,7 +60,7 @@ int main(int argc, char* argv[])
         n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
         process_recv(n_bytes, "recv SYN ACK", sockfd, last_ack, rto);
     } while (!p.syn_set() || !p.ack_set());
-    cout << "Debug: Receiving syn ack packet with seq " << p.seq_num() << endl;
+    cout << "Receiving packet " << p.seq_num() << endl;
     base_num = (p.seq_num() + 1) % MSN;
 
     // send ACK after SYN ACK
@@ -91,7 +91,6 @@ int main(int argc, char* argv[])
         // update window
         Packet_info new_pkt(p, n_bytes - HEADER_LEN, rto.get_timeout());
         window.emplace(p.seq_num(), new_pkt);
-        //cout << "after emplace, window_size is now " << window.size() << endl;
         for (auto it = window.find(base_num); it != window.end(); it = window.find(base_num))
         {
             size_t len = it->second.data_len();
@@ -101,13 +100,11 @@ int main(int argc, char* argv[])
             output.write(buffer, len);
             base_num = (base_num + len) % MSN;
             window.erase(it);
-            //cout << "after erase, window_size is now " << window.size() << endl;
         }
 
         // send FIN ACK if FIN segment
         if (p.fin_set())
         {
-            //cout << "Debug: recv FIN packet with seq " << p.seq_num() << endl;
             base_num = (p.seq_num() + 1) % MSN; //consumed fin segment
             p = Packet(0, 1, 1, seq_num, base_num, MAX_RECV_WINDOW, "", 0);
             status = send(sockfd, (void *) &p, HEADER_LEN, 0);
@@ -119,7 +116,6 @@ int main(int argc, char* argv[])
         }
         else // data segment so send ACK
         {
-            //cout << "Debug: recv file with size " << last_ack.data_len() << endl;
             cout << "Receiving packet " << p.seq_num() << endl;
             p = Packet(0, 1, 0, seq_num, base_num, MAX_RECV_WINDOW - sizeof(window), "", 0);
             status = send(sockfd, (void *) &p, HEADER_LEN, 0);
@@ -131,6 +127,7 @@ int main(int argc, char* argv[])
     output.close();
 
     // recv ACK
+    int tries = 0;
     do
     {
         time_left_tv = time_left(last_ack);
@@ -138,7 +135,13 @@ int main(int argc, char* argv[])
         process_error(status, "setsockopt");
         n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
         process_recv(n_bytes, "recv ACK after FIN ACK", sockfd, last_ack, rto);
-    } while (p.seq_num() != base_num); // discard invalid acks
+        tries++;
+    } while (p.seq_num() != base_num && tries < 5); // discard invalid acks
+    if (tries < 5)
+        seq_num = p.seq_num();
+    else
+        seq_num = p.seq_num() + 1;
+
     cout << "Receiving packet " << p.seq_num() << endl;
 
     close(sockfd);
