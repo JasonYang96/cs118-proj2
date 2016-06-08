@@ -17,7 +17,7 @@ using namespace std;
 const uint16_t MAX_RECV_WINDOW = 15360;
 
 void process_error(int status, const string &function);
-void process_recv(int n_bytes, const string &function, int sockfd, Packet_info &last_ack);
+void process_recv(int n_bytes, const string &function, int sockfd, Packet_info &last_ack, const RTO &rto);
 int set_up_socket(char* argv[]);
 bool valid_pkt(const Packet &p, uint16_t base_num, const unordered_map<uint16_t, Packet_info> &window);
 struct timeval time_left(const Packet_info &last_ack);
@@ -41,13 +41,15 @@ int main(int argc, char* argv[])
     uint16_t seq_num = rand() % MSN;
     uint16_t base_num;
 
+    RTO rto;
+
     // send SYN segment
     p = Packet(1, 0, 0, seq_num, 0, MAX_RECV_WINDOW, "", 0);
-    last_ack = Packet_info(p, 0);
+    last_ack = Packet_info(p, 0, rto.get_timeout());
     status = send(sockfd, (void *) &p, HEADER_LEN, 0);
     process_error(status, "sending SYN");
     seq_num = (seq_num + 1) % MSN; // SYN packet takes up 1 sequence
-    cout << "Sending data packet " << p.seq_num() << " " << MSS << " " << MSS << "SYN" << endl;
+    cout << "Sending packet " << p.seq_num() << " SYN" << endl;
 
     // recv SYN ACK
     do
@@ -56,14 +58,14 @@ int main(int argc, char* argv[])
         status = setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&time_left_tv, sizeof(time_left_tv));
         process_error(status, "setsockopt");
         n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
-        process_recv(n_bytes, "recv SYN ACK", sockfd, last_ack);
+        process_recv(n_bytes, "recv SYN ACK", sockfd, last_ack, rto);
     } while (!p.syn_set() || !p.ack_set());
     cout << "Debug: Receiving syn ack packet with seq " << p.seq_num() << endl;
     base_num = (p.seq_num() + 1) % MSN;
 
     // send ACK after SYN ACK
     p = Packet(0, 1, 0, seq_num, base_num, MAX_RECV_WINDOW, "", 0);
-    last_ack = Packet_info(p, n_bytes - HEADER_LEN);
+    last_ack = Packet_info(p, n_bytes - HEADER_LEN, rto.get_timeout());
     status = send(sockfd, (void *) &p, HEADER_LEN, 0);
     process_error(status, "sending ACK after SYN ACK");
     cout << "Sending packet " << p.ack_num() << endl;
@@ -81,13 +83,13 @@ int main(int argc, char* argv[])
             status = setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&time_left_tv, sizeof(time_left_tv));
             process_error(status, "setsockopt");
             n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
-            process_recv(n_bytes, "recv file", sockfd, last_ack);
+            process_recv(n_bytes, "recv file", sockfd, last_ack, rto);
             if (n_bytes == -1) // if timeout, continue receiving
                 continue;
         } while (!valid_pkt(p, base_num, window));
 
         // update window
-        Packet_info new_pkt(p, n_bytes - HEADER_LEN);
+        Packet_info new_pkt(p, n_bytes - HEADER_LEN, rto.get_timeout());
         window.emplace(p.seq_num(), new_pkt);
         //cout << "after emplace, window_size is now " << window.size() << endl;
         for (auto it = window.find(base_num); it != window.end(); it = window.find(base_num))
@@ -110,19 +112,19 @@ int main(int argc, char* argv[])
             p = Packet(0, 1, 1, seq_num, base_num, MAX_RECV_WINDOW, "", 0);
             status = send(sockfd, (void *) &p, HEADER_LEN, 0);
             process_error(status, "sending FIN ACK");
-            last_ack = Packet_info(p, 0);
-            cout << "Sending packet " << p.ack_num() << endl;
+            last_ack = Packet_info(p, 0, rto.get_timeout());
+            cout << "Sending packet " << p.ack_num() << " FIN" << endl;
             seq_num = (seq_num + 1) % MSN;
             break;
         }
         else // data segment so send ACK
         {
             //cout << "Debug: recv file with size " << last_ack.data_len() << endl;
-            cout << "Receiving data packet " << p.seq_num() << endl;
+            cout << "Receiving packet " << p.seq_num() << endl;
             p = Packet(0, 1, 0, seq_num, base_num, MAX_RECV_WINDOW - sizeof(window), "", 0);
             status = send(sockfd, (void *) &p, HEADER_LEN, 0);
             process_error(status, "sending ACK for data packet");
-            last_ack = Packet_info(p, 0);
+            last_ack = Packet_info(p, 0, rto.get_timeout());
             cout << "Sending packet " << p.ack_num() << endl;
         }
     }
@@ -135,14 +137,14 @@ int main(int argc, char* argv[])
         status = setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&time_left_tv, sizeof(time_left_tv));
         process_error(status, "setsockopt");
         n_bytes = recv(sockfd, (void *) &p, sizeof(p), 0);
-        process_recv(n_bytes, "recv ACK after FIN ACK", sockfd, last_ack);
+        process_recv(n_bytes, "recv ACK after FIN ACK", sockfd, last_ack, rto);
     } while (p.seq_num() != base_num); // discard invalid acks
     cout << "Receiving packet " << p.seq_num() << endl;
 
     close(sockfd);
 }
 
-void process_recv(int n_bytes, const string &function, int sockfd, Packet_info &last_ack)
+void process_recv(int n_bytes, const string &function, int sockfd, Packet_info &last_ack, const RTO &rto)
 {
     if (n_bytes == -1) //error
     {
@@ -150,7 +152,7 @@ void process_recv(int n_bytes, const string &function, int sockfd, Packet_info &
         if (errno == EAGAIN || EWOULDBLOCK || EINPROGRESS)
         {
             // retransmit last packet
-            last_ack.update_time();
+            last_ack.update_time(rto.get_timeout());
             Packet p = last_ack.pkt();
             int status = send(sockfd, (void *) &p, sizeof(p), 0);
             process_error(status, "sending FIN ACK");
