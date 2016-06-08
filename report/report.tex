@@ -25,7 +25,7 @@
 
 \section{Design}
 
-As a group, we implemented two classes to create our TCP packet abstraction, \texttt{Packet} and \texttt{Packet\_info}. We also made the decision to \textit{not} implement classes for the client and server for this project. Rather, we decided to simply execute the client and server code line-by-line in \texttt{client.cpp} and \texttt{server.cpp} respectively.
+As a group, we implemented three classes to create our TCP packet abstraction, \texttt{Packet}, \texttt{Packet\_info}, and \texttt{RTO}. We also made the decision to \textit{not} implement classes for the client and server for this project. Rather, we decided to simply execute the client and server code line-by-line in \texttt{client.cpp} and \texttt{server.cpp} respectively.
 
 \subsection{Packet}
 
@@ -34,6 +34,10 @@ In our project, we used the \texttt{Packet} class for as our TCP packet abstract
 \subsection{Packet\_info}
 
 We also implemented a \texttt{Packet\_info} class that we used to keep track of data length, the time the packet was sent, and the timeout time for the packet.
+
+\subsection{RTO}
+
+The last class we created is an \texttt{RTO} class to help implement the adaptive RTO extra credit feature. The RTO class has three member variables: EstimatedRTT, DevRTT, and timeout. Furthermore, the class has some helper functions such as \texttt{update\_RTO} and \texttt{multiply\_timeval} to facilitate the arithmetic in computing the new timeout value.
 
 \subsection{Client}
 
@@ -160,17 +164,6 @@ tc qdisc add dev eth1 root netem loss 20%
 
 \noindent
 Again, we sent the same four files as with the previous two testing scenarios.
-
-\subsection{Packet Reordering}
-
-The last test case we used was packet reordering. To test this scenario, we simply used the suggested command as follows:
-
-\begin{lstlisting}[language=bash]
-tc qdisc change dev eth1 root netem gap 5 delay 100ms
-\end{lstlisting}
-
-\noindent
-In this case, we also tested the same four files as with the other three test cases.
 
 \section{Contributions}
 
