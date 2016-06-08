@@ -63,7 +63,7 @@ int main(int argc, char* argv[])
     pkt_info = Packet_info(p, n_bytes - HEADER_LEN);
     status = sendto(sockfd, (void *) &p, HEADER_LEN, 0, (struct sockaddr *) &recv_addr, addr_len);
     process_error(status, "sending SYN ACK");
-    cout << "Sending packet " << seq_num << " " << MSS << " " << MSS << endl;
+    cout << "Sending packet " << seq_num << " " << MSS << " " << INITIAL_SSTHRESH << " SYN" << endl;
     seq_num = (seq_num + 1) % MSN;
     base_num = seq_num;
 
@@ -245,7 +245,7 @@ int main(int argc, char* argv[])
     pkt_info = Packet_info(p, 0);
     status = sendto(sockfd, (void *) &p, HEADER_LEN, 0, (struct sockaddr *) &recv_addr, addr_len);
     process_error(status, "sending FIN");
-    cout << "Sending packet " << seq_num << endl;
+    cout << "Sending packet " << seq_num << " FIN" << endl;
     seq_num = (seq_num + 1) % MSN;
     cout << "Debug: Sending FIN" << endl;
 

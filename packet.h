@@ -72,7 +72,6 @@ private:
     char     m_data[MSS]; // MSS bytes
 };
 
-
 class Packet_info
 {
 public:
@@ -125,4 +124,6 @@ private:
     struct timeval m_max_time;
     uint16_t       m_data_len;
 };
+
+
 #endif

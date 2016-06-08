@@ -47,7 +47,7 @@ int main(int argc, char* argv[])
     status = send(sockfd, (void *) &p, HEADER_LEN, 0);
     process_error(status, "sending SYN");
     seq_num = (seq_num + 1) % MSN; // SYN packet takes up 1 sequence
-    cout << "Sending data packet " << p.seq_num() << " " << MSS << " " << MSS << "SYN" << endl;
+    cout << "Sending packet " << p.seq_num() << " SYN" << endl;
 
     // recv SYN ACK
     do
@@ -111,14 +111,14 @@ int main(int argc, char* argv[])
             status = send(sockfd, (void *) &p, HEADER_LEN, 0);
             process_error(status, "sending FIN ACK");
             last_ack = Packet_info(p, 0);
-            cout << "Sending packet " << p.ack_num() << endl;
+            cout << "Sending packet " << p.ack_num() << " FIN" << endl;
             seq_num = (seq_num + 1) % MSN;
             break;
         }
         else // data segment so send ACK
         {
             //cout << "Debug: recv file with size " << last_ack.data_len() << endl;
-            cout << "Receiving data packet " << p.seq_num() << endl;
+            cout << "Receiving packet " << p.seq_num() << endl;
             p = Packet(0, 1, 0, seq_num, base_num, MAX_RECV_WINDOW - sizeof(window), "", 0);
             status = send(sockfd, (void *) &p, HEADER_LEN, 0);
             process_error(status, "sending ACK for data packet");
