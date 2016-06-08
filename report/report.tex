@@ -25,15 +25,19 @@
 
 \section{Design}
 
-As a group, we implemented two classes to create our TCP packet abstraction, \texttt{Packet} and \texttt{Packet\_info}. We also made the decision to \textit{not} implement classes for the client and server for this project. Rather, we decided to simply execute the client and server code line-by-line in \texttt{client.cpp} and \texttt{server.cpp} respectively.
+As a group, we implemented three classes to create our TCP packet abstraction, \texttt{Packet}, \texttt{Packet\_info}, and \texttt{RTO}. We also made the decision to \textit{not} implement classes for the client and server for this project. Rather, we decided to simply execute the client and server code line-by-line in \texttt{client.cpp} and \texttt{server.cpp} respectively.
 
 \subsection{Packet}
 
-In our project, we used the \texttt{Packet} class for as our TCP packet abstraction. The class contained \texttt{SYN}, \texttt{ACK}, and \texttt{FIN} flags, in addtion to member variables for the sequence number, acknowledgment number, recieve window, and the data contained in the packet. The class could either be initialized with each of these values or with default values.
+In our project, we used the \texttt{Packet} class for as our TCP packet abstraction. The class contained \texttt{SYN}, \texttt{ACK}, and \texttt{FIN} flags, in addtion to member variables for the sequence number, acknowledgment number, receive window, and the data contained in the packet. The class could either be initialized with each of these values or with default values.
 
 \subsection{Packet\_info}
 
 We also implemented a \texttt{Packet\_info} class that we used to keep track of data length, the time the packet was sent, and the timeout time for the packet.
+
+\subsection{RTO}
+
+The last class we created is an \texttt{RTO} class to help implement the adaptive RTO extra credit feature. The RTO class has three member variables: EstimatedRTT, DevRTT, and timeout. Furthermore, the class has some helper functions such as \texttt{update\_RTO} and \texttt{multiply\_timeval} to facilitate the arithmetic in computing the new timeout value.
 
 \subsection{Client}
 
@@ -46,22 +50,57 @@ The first step in our client execution is to set-up the UDP socket. To do this, 
 The client then selects a random initial sequence number, initializes a \texttt{Packet} with this sequence number and a \texttt{SYN} flag, and sends it along the UDP socket that was previously set up and increments the sequence number. The client then sits in a loop until a \texttt{Packet} with \texttt{SYN} and \texttt{ACK} flags arrives, and then increments the sequence number. Then, the client sends a \texttt{Packet} with an \texttt{ACK} flag and again increments the sequence number. \\
 
 \noindent
-Now that the connection has been established, the client initializes a window, which is implemented as an \texttt{unordered\_map} of \texttt{uint16\_t} to \texttt{Packet\_info}, and enters a loop that continues until a \texttt{Packet} with a \texttt{FIN} flag has been received. Within the loop, the client discards all invalid \texttt{ACK} packets, updates the window with new packets, and either sends an acknowledgement if a data packet was recieved or a \texttt{FIN/ACK} if a \texttt{FIN} packet was received. The received data is written to the ``received.data'' file and the socket is closed when the client recieves the final \texttt{ACK} packet.
-
+Now that the connection has been established, the client initializes a window, which is implemented as an \texttt{unordered\_map} of \texttt{uint16\_t} to \texttt{Packet\_info}, and enters a loop that continues until a \texttt{Packet} with a \texttt{FIN} flag has been received. Within the loop, the client discards all invalid \texttt{ACK} packets, updates the window with new packets, and either sends an acknowledgment if a data packet was received or a \texttt{FIN/ACK} if a \texttt{FIN} packet was received. The received data is written to the ``received.data'' file and the socket is closed when the client receives the final \texttt{ACK} packet.
 
 \subsection{Server}
+
+The server implementation also mainly followed the general specification of a TCP server although we did use the book's finite-state machine abstraction to implement TCP Tahoe congestion control. \\
+
+\noindent
+The server, like the client, begins by initiating the UDP socket connection with a call to the server's version of the \texttt{set\_up\_socket} function, which takes the port number as a parameter and returns a socket file descriptor. This function simply finds an available socket and binds to it. The server also initiates a window, which like on the client is implemented as an \texttt{unordered\_map} of \texttt{uint16\_t} to \texttt{Packet\_info}. The final step in setting up the server is to select a random initial sequence number. \\
+
+\noindent
+The next step in the server's execution is to wait for a \texttt{Packet} with a \texttt{SYN} flag to come through the socket. Once this packet arrives, the server sets the acknowledgment number to be one greater than the received sequence number and sends a \texttt{SYN/ACK} packet with the appropriate sequence and acknowledgment numbers. Then, the server increments its sequence number. The server then waits for an \texttt{ACK} packet to come in and begins the file transfer process. \\
+
+\noindent
+Before the file transfer begins, the server intializes a congestion window, a slow start threshold, a receive window, counters for packets sent, and boolean variables for keeping track of slow start, congestion avoidance, fast recovery, and fast retransmit. At this point, the server enters the file transfer loop, which it will stay in until the window is full or the entire file has been sent. The server first checks if the retransmission variable is set to true. If it is, the server will re-send the \texttt{base\_num} packet and set retransmission to false. Otherwise, the server will transmit new data packets until the congestion window is full. \\ 
+
+\noindent
+The server then wait to receive an acknowledgment packet. If the wait times out, the slow start threshold will be set to half the congestion window and the congestion window will be set to the maximum segment size. Furthermore, the slow start and retransmission values will be set to true and the congestion avoidance and fast recovery values will be set to false. If retransmission is true at this point, the server will skip the next part of the loop. \\
+
+\noindent
+If the server reaches this point in the loop, then an acknowledgment packet from the client has been correctly received by the server. The server will then check if the acknowledgment number is a duplicate. If it is, the server will increase the congestion window by the maximum segment size if it is in fast recovery mode or increment the duplicate ack counter otherwise. Furthermore, If the server has received 3 duplicated acknowledgments, the slow start threshhold will be set to half the congestion window and the congestion window will be set to the slow start threshhold plus three times the maximum segment size. Furthermore, the fast recovery and retransmission values will be set to true and the congestion avoidance and slow start values will be set to false. \\
+
+\noindent
+If the packet received was not a duplicate, then the server will check if it is in slow start, congestion avoidance, or fast recovery mode. If slow start is true, the congestion window will be incremented by the maximum segment size and the duplicate ack counter will be reset. Furthermore, if the new congestion window value exceeds the slow start threshold, the server sets slow start to false, and enters congestion avoidance mode. If congestion avoidance is true, it keeps track of packets sent and increments the congestion window by a ratio of maximum segment size to \texttt{cwd\_pkts}. If fast recovery is true, the congestion window is set to the slow start threshold, the duplicate ack count is reset, fast recovery mode is disabled, and congestion avoidance is set to true. \\
+
+\noindent
+Finally, at the end of the file transfer loop, the server makes sure that the congestion window is greater than the maximum segment size and less than half the maximum sequence number. The server also ensures that the slow start threshold is at least the maximum segment size. \\
+
+\noindent
+After the file transfer phase is complete, the server sends a \texttt{FIN} packet to the client and increments the sequence number. The server then waits to receive the \texttt{FIN/ACK} packet. Upon receiving the packet, the server increments the acknowledgment number and sends the final \texttt{ACK} packet. The server then waits to make sure that the client received the final acknowledgment. If the client sends another \texttt{FIN/ACK}, then the server will again respond with an \texttt{ACK} packet.
 
 \section{Problems and Solutions}
 
 \subsection{Binary File Transfer Issues}
 
+One issue we had initially was with sending binary files over our client/server connection. For example, we attempted to send the built \texttt{client} executable file using our TCP connection but this file transfer ultimately failed. The issues, as it turns out, was that using \texttt{<<} and \texttt{std::string} cut off at null bytes.
+
 \subsection{Bit Vector Issues}
+
+Another problem we had at first was sending the bit flags in our packet abstraction over the UDP socket properly. We were initially using a bit vector, which sent the bits as 8 bytes rather than 3 bits. The solution to this issue was switching to a bit field. 
 
 \subsection{Congestion Control Issues}
 
+For a long time, we were unable to properly set up TCP Tahoe due to the structure of our server implementation. The notes suggest that we should ensure that all sent packets are ack'd before incrementing the congestion window when in congestion avoidance, but with our server structure it would we be too difficult to keep track of acknowledging each packet before moving on to incrementing the window. As such, we decided to use the finite-state machine abstraction for congestion control that the textbook suggested.
+
 \subsection{Debugging Issues}
 
+One of the main challenges in creating our version of TCP was debugging and ensuring that the code executed properly. Our first instinct was to simply run \texttt{gdb} on each of the executables but we quickly realized that the server and client would simply timeout if we paused the execution at any point. Our debugging solution ended up simply being to use as many debugging \texttt{cout}'s as possible.
+
 \subsection{Extra Bits at the End of Packets}
+
+Another minor problem we ran into while creating our project was random extra bits at the end of certain packets. The problem ended up simply being that no null bytes was added when the data was being read into a buffer on the server. The solution was to change everything to \texttt{strncpy} or other functions that required us to pass in a buffer size variable.
 
 \section{Extra Credit}
 
@@ -69,7 +108,7 @@ For the extra credit portion of the project, our group chose to implement TCP Re
 
 \section{Build Instructions}
 
-For Project 2 we did not modify the Makefile or Vagrantfile and just used the suggested virtual machine and g++ version. To build the project, simply initiate the two Ubuntu-based virtual machines with:
+For Project 2 we did not modify the Vagrantfile and just used the suggested virtual machine and g++ version. We did however opt to use the Project 1 Makefile. Additionally, we changed the makefile to add ``received.data'' as a \texttt{make clean} target. To build the project, simply initiate the two Ubuntu-based virtual machines with:
 
 \begin{lstlisting}[language=bash]
 vagrant up
@@ -125,8 +164,6 @@ tc qdisc add dev eth1 root netem loss 20%
 
 \noindent
 Again, we sent the same four files as with the previous two testing scenarios.
-
-\subsection{Packet Re-ordering}
 
 \section{Contributions}
 
