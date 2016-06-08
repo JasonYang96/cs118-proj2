@@ -49,7 +49,7 @@ int main(int argc, char* argv[])
     status = send(sockfd, (void *) &p, HEADER_LEN, 0);
     process_error(status, "sending SYN");
     seq_num = (seq_num + 1) % MSN; // SYN packet takes up 1 sequence
-    cout << "Sending packet " << p.ack_num() << " SYN" << endl;
+    cout << "Sending packet SYN" << endl;
 
     // recv SYN ACK
     do
@@ -137,12 +137,8 @@ int main(int argc, char* argv[])
         process_recv(n_bytes, "recv ACK after FIN ACK", sockfd, last_ack, rto);
         tries++;
     } while (p.seq_num() != base_num && tries < 5); // discard invalid acks
-    if (tries < 5)
-        seq_num = p.seq_num();
-    else
-        seq_num = p.seq_num() + 1;
 
-    cout << "Receiving packet " << p.seq_num() << endl;
+    cout << "Receiving packet " << p.seq_num() + 1 << endl;
 
     close(sockfd);
 }
