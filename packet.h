@@ -76,19 +76,11 @@ class Packet_info
 {
 public:
     Packet_info() = default;
-    Packet_info(Packet p, uint16_t data_len)
+    Packet_info(Packet p, uint16_t data_len, const struct timeval &timeout)
     {
         m_p = p;
         m_data_len = data_len;
-
-        gettimeofday(&m_time_sent, NULL);
-
-        // create timeout timeval
-        struct timeval timeout;
-        timeout.tv_usec = INITIAL_TIMEOUT * 1000; // microseconds
-
-        // find max_time for first packet
-        timeradd(&m_time_sent, &timeout, &m_max_time);
+        update_time(timeout);
     }
 
     Packet pkt() const
@@ -106,13 +98,14 @@ public:
         return m_max_time;
     }
 
-    void update_time()
+    struct timeval get_time_sent() const
+    {
+        return m_time_sent;
+    }
+
+    void update_time(const struct timeval &timeout)
     {
         gettimeofday(&m_time_sent, NULL);
-
-        // create timeout timeval
-        struct timeval timeout;
-        timeout.tv_usec = INITIAL_TIMEOUT * 1000; // microseconds
 
         // find max_time for first packet
         timeradd(&m_time_sent, &timeout, &m_max_time);
@@ -125,5 +118,66 @@ private:
     uint16_t       m_data_len;
 };
 
+class RTO
+{
+public:
+    RTO()
+    {
+        m_timeout.tv_usec = INITIAL_TIMEOUT * 1000; // microseconds
+        timerclear(&m_EstimatedRTT);
+        timerclear(&m_DevRTT);
+    }
 
+    struct timeval get_timeout() const
+    {
+        return m_timeout;
+    }
+
+    void update_RTO(const struct timeval &time_sent)
+    {
+        struct timeval curr_time;
+        gettimeofday(&curr_time, NULL);
+
+        struct timeval SampleRTT;
+        timersub(&curr_time, &time_sent, &SampleRTT);
+
+        multiply_timeval(SampleRTT, .125);
+        multiply_timeval(m_EstimatedRTT, .175);
+
+        timeradd(&m_EstimatedRTT, &SampleRTT, &m_EstimatedRTT);
+
+        struct timeval time_diff;
+        if (timercmp(&m_EstimatedRTT, &SampleRTT, >))
+        {
+            timersub(&m_EstimatedRTT, &SampleRTT, &time_diff);
+        }
+        else
+        {
+            timersub(&SampleRTT, &m_EstimatedRTT, &time_diff);
+        }
+
+        multiply_timeval(time_diff, .25);
+        multiply_timeval(m_DevRTT, .75);
+
+        timeradd(&m_DevRTT, &time_diff, &m_DevRTT);
+
+        struct timeval new_DevRTT;
+        new_DevRTT.tv_sec = m_DevRTT.tv_sec;
+        new_DevRTT.tv_usec = m_DevRTT.tv_usec;
+
+        multiply_timeval(new_DevRTT, 4);
+        timeradd(&m_EstimatedRTT, &new_DevRTT, &m_timeout);
+    }
+
+    void multiply_timeval(struct timeval &timeval, double factor)
+    {
+        timeval.tv_sec *= factor;
+        timeval.tv_usec *= factor;
+    }
+
+private:
+    struct timeval m_EstimatedRTT;
+    struct timeval m_DevRTT;
+    struct timeval m_timeout;
+};
 #endif
