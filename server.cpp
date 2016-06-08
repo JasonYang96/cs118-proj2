@@ -255,7 +255,6 @@ int main(int argc, char* argv[])
     process_error(status, "sending FIN");
     cout << "Sending packet " << seq_num << " FIN" << endl;
     seq_num = (seq_num + 1) % MSN;
-    cout << "Debug: Sending FIN" << endl;
 
     // recv FIN ACK
     do
