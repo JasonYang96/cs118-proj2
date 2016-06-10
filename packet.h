@@ -8,7 +8,7 @@
 
 const uint16_t MSS = 1024; // MAX IS 1032 but header is 8 bytes
 const uint16_t HEADER_LEN = 8; // bytes
-const uint16_t INITIAL_SSTHRESH = 30720; // bytes
+const uint16_t INITIAL_SSTHRESH = 3000; // bytes
 const uint16_t INITIAL_TIMEOUT = 1000; // ms, 1 sec since RTO adaption
 const uint16_t MSN = 30720; // bytes
 
@@ -167,6 +167,8 @@ public:
 
         multiply_timeval(new_DevRTT, 4);
         timeradd(&m_EstimatedRTT, &new_DevRTT, &m_timeout);
+        m_timeout.tv_sec = 0;
+        m_timeout.tv_usec = 0;
     }
 
     void double_RTO()
